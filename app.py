@@ -42,7 +42,7 @@ def check_cradle_setup(df, index):
 
 def analyze_cradle_setups(symbols, timeframes):
     all_previous_setups = []
-    result_container = result_placeholder
+    result_container = result_placeholder.container()
 
     for tf in timeframes:
         previous_setups = []
@@ -99,7 +99,7 @@ st.title("📊 Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
 st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
 
-result_placeholder = st.empty()
+result_placeholder = st.container()
 placeholder = st.empty()
 
 from datetime import datetime, timedelta
