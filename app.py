@@ -1,3 +1,6 @@
+import streamlit as st
+from streamlit_autorefresh import st_autorefresh
+
 st.title("📊 Cradle Screener")
 
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
