@@ -31,6 +31,29 @@ def check_cradle_setup(df, index):
     prev = df.iloc[index - 1]
     curr = df.iloc[index]
 
+    # Bullish Cradle
+    if (
+        prev['close'] < prev['open'] and
+        ema10.iloc[index - 1] > ema20.iloc[index - 1] and
+        prev['low'] <= ema10.iloc[index - 1] and
+        curr['close'] > curr['open']
+    ):
+        return 'Bullish'
+
+    # Bearish Cradle
+    if (
+        prev['close'] > prev['open'] and
+        ema10.iloc[index - 1] < ema20.iloc[index - 1] and
+        prev['high'] >= ema10.iloc[index - 1] and
+        curr['close'] < curr['open']
+    ):
+        return 'Bearish'
+
+    return None
+
+    prev = df.iloc[index - 1]
+    curr = df.iloc[index]
+
     ema_zone_low = min(ema10.iloc[index - 1], ema20.iloc[index - 1])
     ema_zone_high = max(ema10.iloc[index - 1], ema20.iloc[index - 1])
 
@@ -163,4 +186,3 @@ if st.button("Run Screener"):
         analyze_cradle_setups(symbols, selected_timeframes)
 
     result_placeholder.success("Scan complete!")
-
