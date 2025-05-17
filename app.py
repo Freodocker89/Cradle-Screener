@@ -3,6 +3,10 @@ import ccxt
 import pandas as pd
 import time
 from streamlit_autorefresh import st_autorefresh
+import ccxt
+import pandas as pd
+import time
+from streamlit_autorefresh import st_autorefresh
 
 BITGET = ccxt.bitget()
 
@@ -51,4 +55,3 @@ if st.button("Run Screener"):
         analyze_cradle_setups(symbols, selected_timeframes)
 
     result_placeholder.success("Scan complete!")
-
