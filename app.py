@@ -1,10 +1,11 @@
 import streamlit as st
+st.set_page_config(layout="wide")
 import pandas as pd
 import ccxt
 import time
 
 # === CONFIG ===
-TIMEFRAMES = ['1m', '3m', '5m', '10m', '15m', '20m', '30m', '1h', '2h', '4h', '6h', '8h', '10h', '12h', '16h', '1d', '1w']
+TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d', '3d', '1w', '1M']
 BITGET = ccxt.bitget()
 
 # Display supported timeframes for debugging
@@ -130,6 +131,9 @@ def analyze_cradle_setups(symbols, timeframes):
                     'Setup': setup_previous,
                     'Detected On': 'Previous Candle'
                 })
+                temp_df = pd.DataFrame(previous_setups).style.apply(highlight_cradle, axis=1)
+                result_container.markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
+                result_container.dataframe(temp_df, use_container_width=True)
             time.sleep(0.3)
 
         end_time = time.time()
