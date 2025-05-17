@@ -7,6 +7,11 @@ import time
 TIMEFRAMES = ['1m', '3m', '5m', '10m', '15m', '20m', '30m', '1h', '2h', '4h', '6h', '8h', '10h', '12h', '16h', '1d', '1w']
 BITGET = ccxt.bitget()
 
+# Display supported timeframes for debugging
+st.sidebar.title("⚙️ Debug")
+st.sidebar.write("Supported Timeframes from Exchange:")
+st.sidebar.write(BITGET.timeframes)
+
 # === HELPERS ===
 def highlight_cradle(row):
     color = 'background-color: #003300' if row['Setup'] == 'Bullish' else 'background-color: #330000'
@@ -186,3 +191,4 @@ if st.button("Run Screener"):
         analyze_cradle_setups(symbols, selected_timeframes)
 
     result_placeholder.success("Scan complete!")
+
