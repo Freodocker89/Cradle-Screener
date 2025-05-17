@@ -34,6 +34,32 @@ def check_cradle_setup(df, index):
     ema_zone_low = min(ema10.iloc[index - 1], ema20.iloc[index - 1])
     ema_zone_high = max(ema10.iloc[index - 1], ema20.iloc[index - 1])
 
+    # Bullish Cradle
+    if (
+        prev['close'] < prev['open'] and
+        ema10.iloc[index - 1] > ema20.iloc[index - 1] and
+        ema_zone_low <= prev['close'] <= ema_zone_high and
+        curr['close'] > curr['open']
+    ):
+        return 'Bullish'
+
+    # Bearish Cradle
+    if (
+        prev['close'] > prev['open'] and
+        ema10.iloc[index - 1] < ema20.iloc[index - 1] and
+        ema_zone_low <= prev['close'] <= ema_zone_high and
+        curr['close'] < curr['open']
+    ):
+        return 'Bearish'
+
+    return None
+
+    prev = df.iloc[index - 1]
+    curr = df.iloc[index]
+
+    ema_zone_low = min(ema10.iloc[index - 1], ema20.iloc[index - 1])
+    ema_zone_high = max(ema10.iloc[index - 1], ema20.iloc[index - 1])
+
     if prev['close'] < prev['open'] and ema_zone_low <= prev['close'] <= ema_zone_high and curr['close'] > curr['open']:
         return 'Bullish'
     if prev['close'] > prev['open'] and ema_zone_low <= prev['close'] <= ema_zone_high and curr['close'] < curr['open']:
@@ -134,15 +160,7 @@ if st.button("Run Screener"):
     with st.spinner("Scanning Bitget markets... Please wait..."):
         markets = BITGET.load_markets()
         symbols = [s for s in markets if '/USDT:USDT' in s and markets[s]['type'] == 'swap']
-        previous_df = analyze_cradle_setups(symbols, selected_timeframes)
-
-    if not previous_df.empty:
-        result_placeholder.markdown("### 📈 Cradle Setups (Last Closed Candle)")
-        styled_previous = previous_df.style.apply(highlight_cradle, axis=1)
-        result_placeholder.dataframe(styled_previous, use_container_width=True)
-
-    if previous_df.empty:
-        result_placeholder.warning("No valid Cradle setups found.")
+        analyze_cradle_setups(symbols, selected_timeframes)
 
     result_placeholder.success("Scan complete!")
 
