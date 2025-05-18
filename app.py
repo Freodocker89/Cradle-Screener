@@ -53,11 +53,41 @@ def should_auto_run():
 # Track scan state to prevent refresh interruptions
 if 'is_scanning' not in st.session_state:
     st.session_state.is_scanning = False
+if 'last_run_minute' not in st.session_state:
+    st.session_state.last_run_minute = -1
 
 run_scan = False
 manual_triggered = st.button("Run Screener", key="manual_run_button")
 
-if auto_run and not st.session_state.is_scanning:
+def should_auto_run():
+    now = datetime.datetime.utcnow()
+    total_minutes = now.hour * 60 + now.minute
+    for tf in selected_timeframes:
+        unit = tf[-1]
+        value = int(tf[:-1])
+        if unit == 'm': tf_minutes = value
+        elif unit == 'h': tf_minutes = value * 60
+        elif unit == 'd': tf_minutes = value * 60 * 24
+        elif unit == 'w': tf_minutes = value * 60 * 24 * 7
+        else: continue
+        if total_minutes % tf_minutes == 0 and now.minute != st.session_state.last_run_minute:
+            st.session_state.last_run_minute = now.minute
+            return True
+    return False
+
+def should_trigger_scan():
+    if manual_triggered:
+        return True
+    if auto_run and should_auto_run():
+        return True
+    return False
+
+if should_trigger_scan():
+    run_scan = True
+    st.session_state.is_scanning = True
+manual_triggered = st.button("Run Screener", key="manual_run_button")
+
+if auto_run and not st.session_state.is_scanning and not run_scan:
     st_autorefresh(interval=5000, limit=None, key="auto_cradle_refresh")
 
 if manual_triggered or (auto_run and should_auto_run()):
