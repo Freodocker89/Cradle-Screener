@@ -16,6 +16,12 @@ selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, de
 # Auto-run toggle with unique key to avoid duplicate error
 auto_run = st.checkbox("⏱️ Auto Run on Candle Close", key="auto_run_checkbox")
 
+st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
+
+result_placeholder = st.container()
+placeholder = st.empty()
+
+# Auto-run logic based on selected timeframes
 def should_auto_run():
     now = datetime.datetime.utcnow()
     for tf in selected_timeframes:
@@ -45,12 +51,7 @@ if auto_run:
         st_autorefresh(interval=60000, limit=None, key="auto_cradle_refresh")
         run_scan = True
 else:
-    run_scan = st.button("Run Screener")
-
-st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
-
-result_placeholder = st.container()
-placeholder = st.empty()
+    run_scan = st.button("Run Screener", key="manual_run_button")
 
 def highlight_cradle(row):
     color = 'background-color: #003300' if row['Setup'] == 'Bullish' else 'background-color: #330000'
