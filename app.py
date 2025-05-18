@@ -22,13 +22,13 @@ result_placeholder = st.container()
 placeholder = st.empty()
 
 # Auto-run logic based on selected timeframes
-now = datetime.datetime.utcnow()
-total_minutes = now.hour * 60 + now.minute
 
 if 'last_run_minute' not in st.session_state:
     st.session_state.last_run_minute = -1
 
 def should_auto_run():
+    now = datetime.datetime.utcnow()
+    total_minutes = now.hour * 60 + now.minute
     for tf in selected_timeframes:
         unit = tf[-1]
         value = int(tf[:-1])
@@ -165,5 +165,4 @@ if run_scan:
 
     result_placeholder.success("Scan complete!")
     st.session_state.is_scanning = False
-
 
