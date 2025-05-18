@@ -13,11 +13,17 @@ TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d
 st.title("📊 Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
 
-# Auto-run toggle
-if auto_run := st.checkbox("⏱️ Auto Run on Candle Close"):
-    st_autorefresh(interval=60000, limit=None, key="auto_cradle_refresh")
-auto_run = st.checkbox("⏱️ Auto Run on Candle Close")
-run_scan = st.button("Run Screener")
+# Auto-run toggle with unique key to avoid duplicate error
+auto_run = st.checkbox("⏱️ Auto Run on Candle Close", key="auto_run_checkbox")
+
+# Determine whether to run the scan
+run_scan = False
+if auto_run:
+    if should_auto_run():
+        st_autorefresh(interval=60000, limit=None, key="auto_cradle_refresh")
+        run_scan = True
+else:
+    run_scan = st.button("Run Screener")
 
 st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
 
@@ -138,9 +144,6 @@ def should_auto_run():
             return True
     return False
 
-if auto_run and should_auto_run():
-    run_scan = True
-
 if run_scan:
     placeholder.info("Starting scan...")
     with st.spinner("Scanning Bitget markets... Please wait..."):
@@ -149,4 +152,3 @@ if run_scan:
         analyze_cradle_setups(symbols, selected_timeframes)
 
     result_placeholder.success("Scan complete!")
-
