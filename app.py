@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import ccxt
 import pandas as pd
 import time
@@ -13,6 +14,8 @@ st.title("📊 Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
 
 # Auto-run toggle
+if auto_run := st.checkbox("⏱️ Auto Run on Candle Close"):
+    st_autorefresh(interval=60000, limit=None, key="auto_cradle_refresh")
 auto_run = st.checkbox("⏱️ Auto Run on Candle Close")
 run_scan = st.button("Run Screener")
 
@@ -146,5 +149,4 @@ if run_scan:
         analyze_cradle_setups(symbols, selected_timeframes)
 
     result_placeholder.success("Scan complete!")
-
 
