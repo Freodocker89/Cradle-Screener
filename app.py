@@ -59,7 +59,7 @@ def check_cradle_setup(df, index):
     return None
 
 def analyze_cradle_setups(symbols, timeframes):
-    result_containers = {tf: result_placeholder.container() for tf in timeframes}
+    result_container = result_placeholder.container()
 
     for tf in timeframes:
         previous_setups = []
@@ -95,9 +95,9 @@ def analyze_cradle_setups(symbols, timeframes):
                 })
 
             temp_df = pd.DataFrame(previous_setups).style.apply(highlight_cradle, axis=1)
-            result_containers[tf].empty()
-            result_containers[tf].markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
-            result_containers[tf].dataframe(temp_df, use_container_width=True)
+            result_container.empty()
+            result_container.markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
+            result_container.dataframe(temp_df, use_container_width=True)
 
             time.sleep(0.3)
 
