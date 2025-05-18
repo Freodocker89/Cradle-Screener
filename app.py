@@ -22,8 +22,13 @@ result_placeholder = st.container()
 placeholder = st.empty()
 
 # Auto-run logic based on selected timeframes
+now = datetime.datetime.utcnow()
+total_minutes = now.hour * 60 + now.minute
+
+if 'last_run_minute' not in st.session_state:
+    st.session_state.last_run_minute = -1
+
 def should_auto_run():
-    now = datetime.datetime.utcnow()
     for tf in selected_timeframes:
         unit = tf[-1]
         value = int(tf[:-1])
@@ -39,8 +44,9 @@ def should_auto_run():
             continue
         else:
             continue
-        total_minutes = now.hour * 60 + now.minute
-        if total_minutes % tf_minutes == 0 and now.second < 5:
+
+        if total_minutes % tf_minutes == 0 and now.minute != st.session_state.last_run_minute:
+            st.session_state.last_run_minute = now.minute
             return True
     return False
 
@@ -48,9 +54,10 @@ def should_auto_run():
 run_scan = False
 manual_triggered = st.button("Run Screener", key="manual_run_button")
 
-if auto_run and should_auto_run():
-    st_autorefresh(interval=60000, limit=None, key="auto_cradle_refresh")
-    run_scan = True
+if auto_run:
+    st_autorefresh(interval=5000, limit=None, key="auto_cradle_refresh")
+    if should_auto_run():
+        run_scan = True
 elif manual_triggered:
     run_scan = True
 
