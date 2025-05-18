@@ -96,7 +96,7 @@ def analyze_cradle_setups(symbols, timeframes):
 
             temp_df = pd.DataFrame(previous_setups).style.apply(highlight_cradle, axis=1)
             result_containers[tf].empty()
-                result_containers[tf].markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
+            result_containers[tf].markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
                 result_containers[tf].dataframe(temp_df, use_container_width=True)
 
             time.sleep(0.3)
@@ -114,4 +114,5 @@ if st.button("Run Screener"):
         analyze_cradle_setups(symbols, selected_timeframes)
 
     result_placeholder.success("Scan complete!")
+
 
