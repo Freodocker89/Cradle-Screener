@@ -10,6 +10,9 @@ TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d
 
 st.title("📊 Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
+
+# Auto-run toggle
+auto_run = st.checkbox("⏱️ Auto Run on Candle Close")
 st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
 
 result_placeholder = st.container()
@@ -107,7 +110,31 @@ def analyze_cradle_setups(symbols, timeframes):
         tmin, tsec = divmod(int(elapsed_time), 60)
         time_taken_placeholder.success(f"✅ Finished scanning {tf} in {tmin}m {tsec}s")
 
-if st.button("Run Screener"):
+import datetime
+
+def should_auto_run():
+    now = datetime.datetime.utcnow()
+    for tf in selected_timeframes:
+        unit = tf[-1]
+        value = int(tf[:-1])
+        if unit == 'm':
+            tf_minutes = value
+        elif unit == 'h':
+            tf_minutes = value * 60
+        elif unit == 'd':
+            tf_minutes = value * 60 * 24
+        elif unit == 'w':
+            tf_minutes = value * 60 * 24 * 7
+        elif unit == 'M':
+            continue  # skip monthly, not precisely predictable
+        else:
+            continue
+        total_minutes = now.hour * 60 + now.minute
+        if total_minutes % tf_minutes == 0 and now.second < 5:
+            return True
+    return False
+
+if auto_run and should_auto_run() or st.button("Run Screener"):
     placeholder.info("Starting scan...")
     with st.spinner("Scanning Bitget markets... Please wait..."):
         markets = BITGET.load_markets()
