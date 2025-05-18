@@ -56,9 +56,8 @@ manual_triggered = st.button("Run Screener", key="manual_run_button")
 
 if auto_run:
     st_autorefresh(interval=5000, limit=None, key="auto_cradle_refresh")
-    if should_auto_run():
-        run_scan = True
-elif manual_triggered:
+
+if manual_triggered or (auto_run and should_auto_run()):
     run_scan = True
 
 def highlight_cradle(row):
