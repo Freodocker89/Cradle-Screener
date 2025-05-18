@@ -24,27 +24,35 @@ placeholder = st.empty()
 # Track scan state to prevent refresh interruptions
 if 'is_scanning' not in st.session_state:
     st.session_state.is_scanning = False
-if 'last_run_minute' not in st.session_state:
-    st.session_state.last_run_minute = -1
+if 'last_run_timestamp' not in st.session_state:
+    st.session_state.last_run_timestamp = 0
 
 run_scan = False
-manual_triggered = st.button("Run Screener", key="manual_run")
+manual_triggered = st.button("Run Screener", key="manual_run_button")
 
-# Auto-run logic based on selected timeframes
+# Auto-run logic using timestamp window
 def should_auto_run():
     now = datetime.datetime.utcnow()
-    total_minutes = now.hour * 60 + now.minute
+    now_ts = int(now.timestamp())
+
     for tf in selected_timeframes:
         unit = tf[-1]
         value = int(tf[:-1])
-        if unit == 'm': tf_minutes = value
-        elif unit == 'h': tf_minutes = value * 60
-        elif unit == 'd': tf_minutes = value * 60 * 24
-        elif unit == 'w': tf_minutes = value * 60 * 24 * 7
-        else: continue
-        if total_minutes % tf_minutes == 0 and now.minute != st.session_state.last_run_minute:
-            st.session_state.last_run_minute = now.minute
+        if unit == 'm':
+            tf_seconds = value * 60
+        elif unit == 'h':
+            tf_seconds = value * 60 * 60
+        elif unit == 'd':
+            tf_seconds = value * 60 * 60 * 24
+        elif unit == 'w':
+            tf_seconds = value * 60 * 60 * 24 * 7
+        else:
+            continue
+
+        if (now_ts % tf_seconds) < 30 and (now_ts - st.session_state.last_run_timestamp) > tf_seconds - 30:
+            st.session_state.last_run_timestamp = now_ts
             return True
+
     return False
 
 def should_trigger_scan():
