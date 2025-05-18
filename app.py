@@ -1,8 +1,8 @@
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
 import ccxt
 import pandas as pd
 import time
+import datetime
 
 st.set_page_config(layout="wide")
 
@@ -14,8 +14,8 @@ selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, de
 
 # Auto-run toggle
 auto_run = st.checkbox("⏱️ Auto Run on Candle Close")
-if auto_run:
-    st_autorefresh(interval=30000, limit=None, key="auto_cradle_refresh")
+run_scan = st.button("Run Screener")
+
 st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
 
 result_placeholder = st.container()
@@ -113,8 +113,6 @@ def analyze_cradle_setups(symbols, timeframes):
         tmin, tsec = divmod(int(elapsed_time), 60)
         time_taken_placeholder.success(f"✅ Finished scanning {tf} in {tmin}m {tsec}s")
 
-import datetime
-
 def should_auto_run():
     now = datetime.datetime.utcnow()
     for tf in selected_timeframes:
@@ -129,7 +127,7 @@ def should_auto_run():
         elif unit == 'w':
             tf_minutes = value * 60 * 24 * 7
         elif unit == 'M':
-            continue  # skip monthly, not precisely predictable
+            continue
         else:
             continue
         total_minutes = now.hour * 60 + now.minute
@@ -137,7 +135,10 @@ def should_auto_run():
             return True
     return False
 
-if auto_run and should_auto_run() or st.button("Run Screener"):
+if auto_run and should_auto_run():
+    run_scan = True
+
+if run_scan:
     placeholder.info("Starting scan...")
     with st.spinner("Scanning Bitget markets... Please wait..."):
         markets = BITGET.load_markets()
@@ -145,4 +146,5 @@ if auto_run and should_auto_run() or st.button("Run Screener"):
         analyze_cradle_setups(symbols, selected_timeframes)
 
     result_placeholder.success("Scan complete!")
+
 
