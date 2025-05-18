@@ -46,12 +46,13 @@ def should_auto_run():
 
 # Determine whether to run the scan
 run_scan = False
-if auto_run:
-    if should_auto_run():
-        st_autorefresh(interval=60000, limit=None, key="auto_cradle_refresh")
-        run_scan = True
-else:
-    run_scan = st.button("Run Screener", key="manual_run_button")
+manual_triggered = st.button("Run Screener", key="manual_run_button")
+
+if auto_run and should_auto_run():
+    st_autorefresh(interval=60000, limit=None, key="auto_cradle_refresh")
+    run_scan = True
+elif manual_triggered:
+    run_scan = True
 
 def highlight_cradle(row):
     color = 'background-color: #003300' if row['Setup'] == 'Bullish' else 'background-color: #330000'
