@@ -94,13 +94,13 @@ def analyze_cradle_setups(symbols, timeframes):
                     'Detected On': 'Previous Candle'
                 })
 
-            result_containers[tf].empty()
-            if previous_setups:
-                temp_df = pd.DataFrame(previous_setups).style.apply(highlight_cradle, axis=1)
-                result_containers[tf].markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
-                result_containers[tf].dataframe(temp_df, use_container_width=True)
-
             time.sleep(0.3)
+
+        result_containers[tf].empty()
+        if previous_setups:
+            temp_df = pd.DataFrame(previous_setups).style.apply(highlight_cradle, axis=1)
+            result_containers[tf].markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
+            result_containers[tf].dataframe(temp_df, use_container_width=True)
 
         end_time = time.time()
         elapsed_time = end_time - start_time
