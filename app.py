@@ -50,11 +50,14 @@ def should_auto_run():
             return True
     return False
 
-# Determine whether to run the scan
+# Track scan state to prevent refresh interruptions
+if 'is_scanning' not in st.session_state:
+    st.session_state.is_scanning = False
+
 run_scan = False
 manual_triggered = st.button("Run Screener", key="manual_run_button")
 
-if auto_run:
+if auto_run and not st.session_state.is_scanning:
     st_autorefresh(interval=5000, limit=None, key="auto_cradle_refresh")
 
 if manual_triggered or (auto_run and should_auto_run()):
@@ -153,6 +156,7 @@ def analyze_cradle_setups(symbols, timeframes):
         time_taken_placeholder.success(f"✅ Finished scanning {tf} in {tmin}m {tsec}s")
 
 if run_scan:
+    st.session_state.is_scanning = True
     placeholder.info("Starting scan...")
     with st.spinner("Scanning Bitget markets... Please wait..."):
         markets = BITGET.load_markets()
@@ -160,4 +164,6 @@ if run_scan:
         analyze_cradle_setups(symbols, selected_timeframes)
 
     result_placeholder.success("Scan complete!")
+    st.session_state.is_scanning = False
+
 
