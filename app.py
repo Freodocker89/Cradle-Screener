@@ -21,35 +21,6 @@ st.write("This screener shows valid Cradle setups detected on the last fully clo
 result_placeholder = st.container()
 placeholder = st.empty()
 
-# Auto-run logic based on selected timeframes
-
-if 'last_run_minute' not in st.session_state:
-    st.session_state.last_run_minute = -1
-
-def should_auto_run():
-    now = datetime.datetime.utcnow()
-    total_minutes = now.hour * 60 + now.minute
-    for tf in selected_timeframes:
-        unit = tf[-1]
-        value = int(tf[:-1])
-        if unit == 'm':
-            tf_minutes = value
-        elif unit == 'h':
-            tf_minutes = value * 60
-        elif unit == 'd':
-            tf_minutes = value * 60 * 24
-        elif unit == 'w':
-            tf_minutes = value * 60 * 24 * 7
-        elif unit == 'M':
-            continue
-        else:
-            continue
-
-        if total_minutes % tf_minutes == 0 and now.minute != st.session_state.last_run_minute:
-            st.session_state.last_run_minute = now.minute
-            return True
-    return False
-
 # Track scan state to prevent refresh interruptions
 if 'is_scanning' not in st.session_state:
     st.session_state.is_scanning = False
@@ -57,8 +28,9 @@ if 'last_run_minute' not in st.session_state:
     st.session_state.last_run_minute = -1
 
 run_scan = False
-manual_triggered = st.button("Run Screener", key="manual_run_button")
+manual_triggered = st.button("Run Screener", key="manual_run")
 
+# Auto-run logic based on selected timeframes
 def should_auto_run():
     now = datetime.datetime.utcnow()
     total_minutes = now.hour * 60 + now.minute
@@ -85,13 +57,9 @@ def should_trigger_scan():
 if should_trigger_scan():
     run_scan = True
     st.session_state.is_scanning = True
-manual_triggered = st.button("Run Screener", key="manual_run_button")
 
 if auto_run and not st.session_state.is_scanning and not run_scan:
-    st_autorefresh(interval=5000, limit=None, key="auto_cradle_refresh")
-
-if manual_triggered or (auto_run and should_auto_run()):
-    run_scan = True
+    st_autorefresh(interval=15000, limit=None, key="auto_cradle_refresh")
 
 def highlight_cradle(row):
     color = 'background-color: #003300' if row['Setup'] == 'Bullish' else 'background-color: #330000'
