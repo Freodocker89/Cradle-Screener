@@ -16,6 +16,28 @@ selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, de
 # Auto-run toggle with unique key to avoid duplicate error
 auto_run = st.checkbox("⏱️ Auto Run on Candle Close", key="auto_run_checkbox")
 
+def should_auto_run():
+    now = datetime.datetime.utcnow()
+    for tf in selected_timeframes:
+        unit = tf[-1]
+        value = int(tf[:-1])
+        if unit == 'm':
+            tf_minutes = value
+        elif unit == 'h':
+            tf_minutes = value * 60
+        elif unit == 'd':
+            tf_minutes = value * 60 * 24
+        elif unit == 'w':
+            tf_minutes = value * 60 * 24 * 7
+        elif unit == 'M':
+            continue
+        else:
+            continue
+        total_minutes = now.hour * 60 + now.minute
+        if total_minutes % tf_minutes == 0 and now.second < 5:
+            return True
+    return False
+
 # Determine whether to run the scan
 run_scan = False
 if auto_run:
@@ -122,28 +144,6 @@ def analyze_cradle_setups(symbols, timeframes):
         tmin, tsec = divmod(int(elapsed_time), 60)
         time_taken_placeholder.success(f"✅ Finished scanning {tf} in {tmin}m {tsec}s")
 
-def should_auto_run():
-    now = datetime.datetime.utcnow()
-    for tf in selected_timeframes:
-        unit = tf[-1]
-        value = int(tf[:-1])
-        if unit == 'm':
-            tf_minutes = value
-        elif unit == 'h':
-            tf_minutes = value * 60
-        elif unit == 'd':
-            tf_minutes = value * 60 * 24
-        elif unit == 'w':
-            tf_minutes = value * 60 * 24 * 7
-        elif unit == 'M':
-            continue
-        else:
-            continue
-        total_minutes = now.hour * 60 + now.minute
-        if total_minutes % tf_minutes == 0 and now.second < 5:
-            return True
-    return False
-
 if run_scan:
     placeholder.info("Starting scan...")
     with st.spinner("Scanning Bitget markets... Please wait..."):
@@ -152,3 +152,4 @@ if run_scan:
         analyze_cradle_setups(symbols, selected_timeframes)
 
     result_placeholder.success("Scan complete!")
+
