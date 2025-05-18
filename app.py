@@ -59,7 +59,7 @@ def check_cradle_setup(df, index):
     return None
 
 def analyze_cradle_setups(symbols, timeframes):
-    result_containers = {tf: result_placeholder.container() for tf in timeframes}
+    result_containers = {tf: st.container() for tf in timeframes}
 
     for tf in timeframes:
         previous_setups = []
