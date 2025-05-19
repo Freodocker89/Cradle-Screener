@@ -158,8 +158,6 @@ def analyze_cradle_setups(symbols, timeframes):
             df_result = pd.DataFrame(previous_setups)
             result_containers[tf].markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
             result_containers[tf].markdown(df_result.to_markdown(index=False), unsafe_allow_html=True)
-            result_containers[tf].markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
-            result_containers[tf].dataframe(temp_df, use_container_width=True)
 
         end_time = time.time()
         elapsed_time = end_time - start_time
