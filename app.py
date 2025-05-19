@@ -141,8 +141,11 @@ def analyze_cradle_setups(symbols, timeframes):
             setup_previous = check_cradle_setup(df, len(df) - 2)
 
             if setup_previous:
+                symbol_clean = symbol.replace('/USDT:USDT', 'USDT')
+                tv_symbol = f"BITGET:{symbol_clean}.P"
+                tv_url = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
                 previous_setups.append({
-                    'Symbol': symbol,
+                    'Symbol': f"[{symbol}]({tv_url})",
                     'Timeframe': tf,
                     'Setup': setup_previous,
                     'Detected On': 'Previous Candle'
@@ -152,7 +155,9 @@ def analyze_cradle_setups(symbols, timeframes):
 
         result_containers[tf].empty()
         if previous_setups:
-            temp_df = pd.DataFrame(previous_setups).style.apply(highlight_cradle, axis=1)
+            df_result = pd.DataFrame(previous_setups)
+            result_containers[tf].markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
+            result_containers[tf].markdown(df_result.to_markdown(index=False), unsafe_allow_html=True)
             result_containers[tf].markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
             result_containers[tf].dataframe(temp_df, use_container_width=True)
 
