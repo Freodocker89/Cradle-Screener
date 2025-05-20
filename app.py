@@ -146,7 +146,7 @@ def analyze_cradle_setups(symbols, timeframes):
                 tv_url = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
                 previous_setups.append({
                     'Symbol': symbol,
-                    'Link': tv_url,
+                    'Link': f"[Open Chart]({tv_url})",
                     'Timeframe': tf,
                     'Setup': setup_previous,
                     'Detected On': 'Previous Candle'
@@ -158,7 +158,8 @@ def analyze_cradle_setups(symbols, timeframes):
         if previous_setups:
             df_result = pd.DataFrame(previous_setups)
             result_containers[tf].markdown(f"### 📈 Cradle Setups – {tf} (Last Closed Candle)", unsafe_allow_html=True)
-            result_containers[tf].dataframe(df_result, use_container_width=True)
+            styled_df = df_result.style.apply(highlight_cradle, axis=1)
+            result_containers[tf].dataframe(styled_df, use_container_width=True)
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -175,3 +176,4 @@ if run_scan:
 
     result_placeholder.success("Scan complete!")
     st.session_state.is_scanning = False
+
