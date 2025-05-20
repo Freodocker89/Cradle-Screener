@@ -175,4 +175,3 @@ if run_scan:
 
     result_placeholder.success("Scan complete!")
     st.session_state.is_scanning = False
-
