@@ -145,7 +145,8 @@ def analyze_cradle_setups(symbols, timeframes):
                 tv_symbol = f"BITGET:{symbol_clean}.P"
                 tv_url = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
                 previous_setups.append({
-                    'Symbol': f"[{symbol}]({tv_url})",
+                    'Symbol': symbol,
+                    'Link': tv_url,
                     'Timeframe': tf,
                     'Setup': setup_previous,
                     'Detected On': 'Previous Candle'
