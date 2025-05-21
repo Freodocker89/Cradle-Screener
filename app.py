@@ -98,6 +98,35 @@ def check_cradle_setup(df, index):
     if (
         prev2['close'] < prev2['open'] and  # candle 1 bearish
         prev['close'] < prev['open'] and    # candle 2 bearish
+        ema10.iloc[index - 2] > ema20.iloc[index - 2] and  # correct bullish EMA trend
+        prev2['low'] <= ema10.iloc[index - 2] and
+        prev['low'] <= ema10.iloc[index - 1] and
+        curr['close'] > curr['open']       # current candle bullish
+    ):
+        return 'Bullish'
+
+    # Bearish Cradle
+    if (
+        prev2['close'] > prev2['open'] and  # candle 1 bullish
+        prev['close'] > prev['open'] and    # candle 2 bullish
+        ema10.iloc[index - 2] < ema20.iloc[index - 2] and  # correct bearish EMA trend
+        prev2['high'] >= ema10.iloc[index - 2] and
+        prev['high'] >= ema10.iloc[index - 1] and
+        curr['close'] < curr['open']       # current candle bearish
+    ):
+        return 'Bearish'
+
+    return None
+
+    # Check last two candles
+    curr = df.iloc[index]
+    prev = df.iloc[index - 1]
+    prev2 = df.iloc[index - 2]
+
+    # Bullish Cradle
+    if (
+        prev2['close'] < prev2['open'] and  # candle 1 bearish
+        prev['close'] < prev['open'] and    # candle 2 bearish
         ema10.iloc[index - 2] > ema20.iloc[index - 2] and  # trend up
         (prev2['low'] <= ema10.iloc[index - 2] or prev2['low'] <= ema20.iloc[index - 2]) and
         (prev['low'] <= ema10.iloc[index - 1] or prev['low'] <= ema20.iloc[index - 1]) and
