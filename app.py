@@ -93,6 +93,40 @@ def check_cradle_setup(df, index):
     prev = df.iloc[index - 1]
     prev2 = df.iloc[index - 2]
 
+    # Define the cradle zone for each pullback candle
+    lower_cradle_prev2 = min(ema10.iloc[index - 2], ema20.iloc[index - 2])
+    upper_cradle_prev2 = max(ema10.iloc[index - 2], ema20.iloc[index - 2])
+    lower_cradle_prev1 = min(ema10.iloc[index - 1], ema20.iloc[index - 1])
+    upper_cradle_prev1 = max(ema10.iloc[index - 1], ema20.iloc[index - 1])
+
+    # Bullish Cradle Setup
+    if (
+        prev2['close'] < prev2['open'] and
+        prev['close'] < prev['open'] and
+        ema10.iloc[index - 2] > ema20.iloc[index - 2] and
+        lower_cradle_prev2 <= prev2['low'] <= upper_cradle_prev2 and
+        lower_cradle_prev1 <= prev['low'] <= upper_cradle_prev1 and
+        curr['close'] > curr['open']
+    ):
+        return 'Bullish'
+
+    # Bearish Cradle Setup
+    if (
+        prev2['close'] > prev2['open'] and
+        prev['close'] > prev['open'] and
+        ema10.iloc[index - 2] < ema20.iloc[index - 2] and
+        lower_cradle_prev2 <= prev2['high'] <= upper_cradle_prev2 and
+        lower_cradle_prev1 <= prev['high'] <= upper_cradle_prev1 and
+        curr['close'] < curr['open']
+    ):
+        return 'Bearish'
+
+    return None
+
+    curr = df.iloc[index]
+    prev = df.iloc[index - 1]
+    prev2 = df.iloc[index - 2]
+
     # Cradle zone bounds (between EMAs)
     lower_cradle_prev2 = min(ema10.iloc[index - 2], ema20.iloc[index - 2])
     upper_cradle_prev2 = max(ema10.iloc[index - 2], ema20.iloc[index - 2])
