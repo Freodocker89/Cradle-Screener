@@ -74,8 +74,34 @@ def check_cradle_setup(df, index):
     ema10 = df['close'].ewm(span=10).mean()
     ema20 = df['close'].ewm(span=20).mean()
 
-    if index < 3 or index >= len(df):
+    if index < 2 or index >= len(df):
         return None
+
+    curr = df.iloc[index]
+    prev = df.iloc[index - 1]
+
+    cradle_top_prev = max(ema10.iloc[index - 1], ema20.iloc[index - 1])
+    cradle_bot_prev = min(ema10.iloc[index - 1], ema20.iloc[index - 1])
+
+    # Long Setup
+    if (
+        ema10.iloc[index - 1] > ema20.iloc[index - 1] and
+        prev['close'] < prev['open'] and
+        cradle_bot_prev <= prev['close'] <= cradle_top_prev and
+        curr['close'] > curr['open']
+    ):
+        return 'Bullish'
+
+    # Short Setup
+    if (
+        ema10.iloc[index - 1] < ema20.iloc[index - 1] and
+        prev['close'] > prev['open'] and
+        cradle_bot_prev <= prev['close'] <= cradle_top_prev and
+        curr['close'] < curr['open']
+    ):
+        return 'Bearish'
+
+    return None
 
     curr = df.iloc[index]
     prev = df.iloc[index - 1]
