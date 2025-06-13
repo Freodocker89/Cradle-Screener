@@ -29,7 +29,6 @@ else:
     text_color = '#000'
     border_color = '#ccc'
 
-# Inject global styling via CSS
 st.markdown(f"""
     <style>
     body {{
@@ -56,10 +55,10 @@ table_styles = {
     'border': f'1px solid {border_color}'
 }
 
-st.title("📊 Cradle Screener")
+st.title("\ud83d\udcca Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
 
-auto_run = st.checkbox("⏱️ Auto Run on Candle Close", key="auto_run_checkbox")
+auto_run = st.checkbox("\u23f1\ufe0f Auto Run on Candle Close", key="auto_run_checkbox")
 st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
 
 placeholder = st.empty()
@@ -68,6 +67,8 @@ if 'is_scanning' not in st.session_state:
     st.session_state.is_scanning = False
 if 'last_run_timestamp' not in st.session_state:
     st.session_state.last_run_timestamp = 0
+if 'results' not in st.session_state:
+    st.session_state.results = {}
 
 run_scan = False
 manual_triggered = st.button("Run Screener", key="manual_run_button")
@@ -154,9 +155,9 @@ def analyze_cradle_setups(symbols, timeframes):
             remaining_time = avg_time * (total - (idx + 1))
             mins, secs = divmod(int(remaining_time), 60)
 
-            status_line.info(f"🔍 Scanning: {symbol} on {tf} ({idx+1}/{total})")
+            status_line.info(f"\ud83d\udd0d Scanning: {symbol} on {tf} ({idx+1}/{total})")
             progress_bar.progress((idx + 1) / total)
-            eta_placeholder.markdown(f"⏳ Estimated time remaining: {mins}m {secs}s")
+            eta_placeholder.markdown(f"\u23f3 Estimated time remaining: {mins}m {secs}s")
 
             df = fetch_ohlcv(symbol, tf)
             if df is None or len(df) < 5:
@@ -195,13 +196,39 @@ def analyze_cradle_setups(symbols, timeframes):
                 """, unsafe_allow_html=True)
                 st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
 
-        show_results(current_setups, f"📈 Cradle Setups – {tf} (Current Candle)")
-        show_results(second_last_setups, f"🕒 Cradle Setups – {tf} (2nd Last Candle)")
+        show_results(current_setups, f"\ud83d\udcc8 Cradle Setups – {tf} (Current Candle)")
+        show_results(second_last_setups, f"\ud83d\udd52 Cradle Setups – {tf} (2nd Last Candle)")
+
+        st.session_state.results[tf] = {
+            "current": current_setups,
+            "second_last": second_last_setups
+        }
 
         end_time = time.time()
         elapsed_time = end_time - start_time
         tmin, tsec = divmod(int(elapsed_time), 60)
-        time_taken_placeholder.success(f"✅ Finished scanning {tf} in {tmin}m {tsec}s")
+        time_taken_placeholder.success(f"\u2705 Finished scanning {tf} in {tmin}m {tsec}s")
+
+if not run_scan and st.session_state.results:
+    st.markdown("### \ud83d\udcca Showing previously scanned results")
+    for tf in selected_timeframes:
+        if tf in st.session_state.results:
+            setups = st.session_state.results[tf]
+            def show_results(setups_list, title):
+                if setups_list:
+                    df_result = pd.DataFrame(setups_list)
+                    longs = df_result[df_result['Setup'] == 'Bullish']
+                    shorts = df_result[df_result['Setup'] == 'Bearish']
+                    sorted_df = pd.concat([longs, shorts])
+                    st.markdown(f"""
+                        <div style='background-color: {background_color}; color: {text_color}; padding: 10px; border-radius: 10px;'>
+                            <h3>{title}</h3>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
+
+            show_results(setups["current"], f"\ud83d\udcc8 Cradle Setups – {tf} (Current Candle)")
+            show_results(setups["second_last"], f"\ud83d\udd52 Cradle Setups – {tf} (2nd Last Candle)")
 
 if run_scan:
     st.session_state.is_scanning = True
@@ -212,4 +239,3 @@ if run_scan:
         analyze_cradle_setups(symbols, selected_timeframes)
     placeholder.success("Scan complete!")
     st.session_state.is_scanning = False
-
