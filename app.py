@@ -1,9 +1,7 @@
-import streamlit as st
-from streamlit_autorefresh import st_autorefresh
-import ccxt
-import pandas as pd
-import time
-import datetime
+
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 st.set_page_config(layout="wide")
 
