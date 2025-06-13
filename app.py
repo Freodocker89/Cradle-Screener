@@ -221,6 +221,8 @@ def scan_timeframe(tf, symbols):
                 </div>
             """, unsafe_allow_html=True)
             st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
+        else:
+            st.markdown(f"**No setups found for {tf} – {title}**")
 
     show_results(current_setups, f"📈 Cradle Setups – {tf} (Current Candle)")
     show_results(second_last_setups, f"🕒 Cradle Setups – {tf} (2nd Last Candle)")
@@ -264,4 +266,5 @@ if run_scan:
         analyze_cradle_setups(symbols, selected_timeframes)
     placeholder.success("Scan complete!")
     st.session_state.is_scanning = False
+
 
