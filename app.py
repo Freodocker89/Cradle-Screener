@@ -55,10 +55,10 @@ table_styles = {
     'border': f'1px solid {border_color}'
 }
 
-st.title("\ud83d\udcca Cradle Screener")
+st.title("Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
 
-auto_run = st.checkbox("\u23f1\ufe0f Auto Run on Candle Close", key="auto_run_checkbox")
+auto_run = st.checkbox("⏱️ Auto Run on Candle Close", key="auto_run_checkbox")
 st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
 
 placeholder = st.empty()
@@ -155,9 +155,9 @@ def analyze_cradle_setups(symbols, timeframes):
             remaining_time = avg_time * (total - (idx + 1))
             mins, secs = divmod(int(remaining_time), 60)
 
-            status_line.info(f"\ud83d\udd0d Scanning: {symbol} on {tf} ({idx+1}/{total})")
+            status_line.info(f"🔍 Scanning: {symbol} on {tf} ({idx+1}/{total})")
             progress_bar.progress((idx + 1) / total)
-            eta_placeholder.markdown(f"\u23f3 Estimated time remaining: {mins}m {secs}s")
+            eta_placeholder.markdown(f"⏳ Estimated time remaining: {mins}m {secs}s")
 
             df = fetch_ohlcv(symbol, tf)
             if df is None or len(df) < 5:
@@ -196,8 +196,8 @@ def analyze_cradle_setups(symbols, timeframes):
                 """, unsafe_allow_html=True)
                 st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
 
-        show_results(current_setups, f"\ud83d\udcc8 Cradle Setups – {tf} (Current Candle)")
-        show_results(second_last_setups, f"\ud83d\udd52 Cradle Setups – {tf} (2nd Last Candle)")
+        show_results(current_setups, f"📈 Cradle Setups – {tf} (Current Candle)")
+        show_results(second_last_setups, f"🕒 Cradle Setups – {tf} (2nd Last Candle)")
 
         st.session_state.results[tf] = {
             "current": current_setups,
@@ -207,10 +207,10 @@ def analyze_cradle_setups(symbols, timeframes):
         end_time = time.time()
         elapsed_time = end_time - start_time
         tmin, tsec = divmod(int(elapsed_time), 60)
-        time_taken_placeholder.success(f"\u2705 Finished scanning {tf} in {tmin}m {tsec}s")
+        time_taken_placeholder.success(f"✅ Finished scanning {tf} in {tmin}m {tsec}s")
 
 if not run_scan and st.session_state.results:
-    st.markdown("### \ud83d\udcca Showing previously scanned results")
+    st.markdown("### 📊 Showing previously scanned results")
     for tf in selected_timeframes:
         if tf in st.session_state.results:
             setups = st.session_state.results[tf]
@@ -227,8 +227,8 @@ if not run_scan and st.session_state.results:
                     """, unsafe_allow_html=True)
                     st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
 
-            show_results(setups["current"], f"\ud83d\udcc8 Cradle Setups – {tf} (Current Candle)")
-            show_results(setups["second_last"], f"\ud83d\udd52 Cradle Setups – {tf} (2nd Last Candle)")
+            show_results(setups["current"], f"📈 Cradle Setups – {tf} (Current Candle)")
+            show_results(setups["second_last"], f"🕒 Cradle Setups – {tf} (2nd Last Candle)")
 
 if run_scan:
     st.session_state.is_scanning = True
@@ -239,3 +239,4 @@ if run_scan:
         analyze_cradle_setups(symbols, selected_timeframes)
     placeholder.success("Scan complete!")
     st.session_state.is_scanning = False
+
