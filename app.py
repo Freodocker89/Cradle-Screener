@@ -1,12 +1,12 @@
 import sys
 import io
-
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 import ccxt
 import pandas as pd
 import time
 import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 st.set_page_config(layout="wide")
 
@@ -142,27 +142,52 @@ def check_cradle_setup(df, index):
     return None
 
 def analyze_cradle_setups(symbols, timeframes):
-    for tf in timeframes:
-        current_setups = []
-        second_last_setups = []
-        status_line = st.empty()
-        progress_bar = st.progress(0)
-        eta_placeholder = st.empty()
-        time_taken_placeholder = st.empty()
-        total = len(symbols)
-        start_time = time.time()
+    def scan_symbol(symbol, tf):
+        df = fetch_ohlcv(symbol, tf)
+        if df is None or len(df) < 5:
+            return None, None
+        curr_setup = check_cradle_setup(df, len(df) - 1)
+        prev_setup = check_cradle_setup(df, len(df) - 2)
+        return curr_setup, prev_setup
 
-        for idx, symbol in enumerate(symbols):
+    with ThreadPoolExecutor() as tf_executor:
+        futures = {
+            tf_executor.submit(scan_timeframe, tf, symbols): tf for tf in timeframes
+        }
+        for future in as_completed(futures):
+            tf = futures[future]
+            try:
+                tf_result = future.result()
+                if tf_result:
+                    st.session_state.results[tf] = tf_result
+            except Exception as e:
+                st.warning(f"Error processing {tf}: {e}")
+
+def scan_timeframe(tf, symbols):
+    current_setups = []
+    second_last_setups = []
+    status_line = st.empty()
+    progress_bar = st.progress(0)
+    eta_placeholder = st.empty()
+    time_taken_placeholder = st.empty()
+    total = len(symbols)
+    start_time = time.time()
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_symbol = {
+            executor.submit(fetch_ohlcv, symbol, tf): symbol for symbol in symbols
+        }
+        for idx, future in enumerate(as_completed(future_to_symbol)):
+            symbol = future_to_symbol[future]
             elapsed = time.time() - start_time
             avg_time = elapsed / (idx + 1)
             remaining_time = avg_time * (total - (idx + 1))
             mins, secs = divmod(int(remaining_time), 60)
-
             status_line.info(f"🔍 Scanning: {symbol} on {tf} ({idx+1}/{total})")
             progress_bar.progress((idx + 1) / total)
             eta_placeholder.markdown(f"⏳ Estimated time remaining: {mins}m {secs}s")
 
-            df = fetch_ohlcv(symbol, tf)
+            df = future.result()
             if df is None or len(df) < 5:
                 continue
 
@@ -184,33 +209,30 @@ def analyze_cradle_setups(symbols, timeframes):
                     'Detected On': '2nd Last Candle'
                 })
 
-            time.sleep(0.3)
+    def show_results(setups, title):
+        if setups:
+            df_result = pd.DataFrame(setups)
+            longs = df_result[df_result['Setup'] == 'Bullish']
+            shorts = df_result[df_result['Setup'] == 'Bearish']
+            sorted_df = pd.concat([longs, shorts])
+            st.markdown(f"""
+                <div style='background-color: {background_color}; color: {text_color}; padding: 10px; border-radius: 10px;'>
+                    <h3>{title}</h3>
+                </div>
+            """, unsafe_allow_html=True)
+            st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
 
-        def show_results(setups, title):
-            if setups:
-                df_result = pd.DataFrame(setups)
-                longs = df_result[df_result['Setup'] == 'Bullish']
-                shorts = df_result[df_result['Setup'] == 'Bearish']
-                sorted_df = pd.concat([longs, shorts])
-                st.markdown(f"""
-                    <div style='background-color: {background_color}; color: {text_color}; padding: 10px; border-radius: 10px;'>
-                        <h3>{title}</h3>
-                    </div>
-                """, unsafe_allow_html=True)
-                st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
+    show_results(current_setups, f"📈 Cradle Setups – {tf} (Current Candle)")
+    show_results(second_last_setups, f"🕒 Cradle Setups – {tf} (2nd Last Candle)")
 
-        show_results(current_setups, f"📈 Cradle Setups – {tf} (Current Candle)")
-        show_results(second_last_setups, f"🕒 Cradle Setups – {tf} (2nd Last Candle)")
+    end_time = time.time()
+    tmin, tsec = divmod(int(end_time - start_time), 60)
+    time_taken_placeholder.success(f"✅ Finished scanning {tf} in {tmin}m {tsec}s")
 
-        st.session_state.results[tf] = {
-            "current": current_setups,
-            "second_last": second_last_setups
-        }
-
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        tmin, tsec = divmod(int(elapsed_time), 60)
-        time_taken_placeholder.success(f"✅ Finished scanning {tf} in {tmin}m {tsec}s")
+    return {
+        "current": current_setups,
+        "second_last": second_last_setups
+    }
 
 if not run_scan and st.session_state.results:
     st.markdown("### 📊 Showing previously scanned results")
