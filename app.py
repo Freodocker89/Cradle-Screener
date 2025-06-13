@@ -1,6 +1,5 @@
 import sys
 import io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
@@ -243,5 +242,4 @@ if run_scan:
         analyze_cradle_setups(symbols, selected_timeframes)
     placeholder.success("Scan complete!")
     st.session_state.is_scanning = False
-
 
