@@ -236,10 +236,7 @@ def scan_timeframe(tf, symbols):
         "second_last": second_last_setups
     }
 
-if not run_scan and st.session_state.results:
-    st.markdown("### 📊 Showing previously scanned results")
-    for tf in selected_timeframes:
-        if tf in st.session_state.results:
+if st.session_state.results:
             setups = st.session_state.results[tf]
             def show_results(setups_list, title):
                 if setups_list:
@@ -267,4 +264,26 @@ if run_scan:
     placeholder.success("Scan complete!")
     st.session_state.is_scanning = False
 
+    # Show results after scan completes
+    st.markdown("### 📊 Showing scanned results")
+    for tf in selected_timeframes:
+        if tf in st.session_state.results:
+            setups = st.session_state.results[tf]
+            def show_results(setups_list, title):
+                if setups_list:
+                    df_result = pd.DataFrame(setups_list)
+                    longs = df_result[df_result['Setup'] == 'Bullish']
+                    shorts = df_result[df_result['Setup'] == 'Bearish']
+                    sorted_df = pd.concat([longs, shorts])
+                    st.markdown(f"""
+                        <div style='background-color: {background_color}; color: {text_color}; padding: 10px; border-radius: 10px;'>
+                            <h3>{title}</h3>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
+                else:
+                    st.markdown(f"**No setups found for {tf} – {title}**")
+
+            show_results(setups["current"], f"📈 Cradle Setups – {tf} (Current Candle)")
+            show_results(setups["second_last"], f"🕒 Cradle Setups – {tf} (2nd Last Candle)")
 
