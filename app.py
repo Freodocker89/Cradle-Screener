@@ -115,175 +115,130 @@ def check_cradle_setup(df, index):
     ema10 = df['close'].ewm(span=10).mean()
     ema20 = df['close'].ewm(span=20).mean()
 
-    if index < 1 or index >= len(df):
+    if index < 2 or index >= len(df):
         return None
 
-    curr = df.iloc[index]
-    prev = df.iloc[index - 1]
-    cradle_top_prev = max(ema10.iloc[index - 1], ema20.iloc[index - 1])
-    cradle_bot_prev = min(ema10.iloc[index - 1], ema20.iloc[index - 1])
+    c1 = df.iloc[index - 2]  # Pullback candle
+    c2 = df.iloc[index - 1]  # Rest candle
 
+    cradle_top = max(ema10.iloc[index - 2], ema20.iloc[index - 2])
+    cradle_bot = min(ema10.iloc[index - 2], ema20.iloc[index - 2])
+
+    c2_body = abs(c2['close'] - c2['open'])
+    c2_upper_wick = c2['high'] - max(c2['close'], c2['open'])
+    c2_lower_wick = min(c2['close'], c2['open']) - c2['low']
+    c2_total_wick = c2_upper_wick + c2_lower_wick
+
+    # Define max wick size as a percentage of the candle range (e.g., wicks < 50% of total)
+    c2_range = c2['high'] - c2['low']
+    c2_wick_ratio = c2_total_wick / c2_range if c2_range != 0 else 0
+
+    # Bullish signal (on close of candle 2)
     if (
-        ema10.iloc[index - 1] > ema20.iloc[index - 1] and
-        prev['close'] < prev['open'] and
-        cradle_bot_prev <= prev['close'] <= cradle_top_prev and
-        curr['close'] > curr['open']
+        ema10.iloc[index - 2] > ema20.iloc[index - 2] and
+        c1['close'] < c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        c2_body < abs(c1['close'] - c1['open']) and
+        c2_wick_ratio < 0.5
     ):
         return 'Bullish'
 
+    # Bearish signal (on close of candle 2)
     if (
-        ema10.iloc[index - 1] < ema20.iloc[index - 1] and
-        prev['close'] > prev['open'] and
-        cradle_bot_prev <= prev['close'] <= cradle_top_prev and
-        curr['close'] < curr['open']
+        ema10.iloc[index - 2] < ema20.iloc[index - 2] and
+        c1['close'] > c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        c2_body < abs(c1['close'] - c1['open']) and
+        c2_wick_ratio < 0.5
     ):
         return 'Bearish'
 
     return None
 
-def analyze_cradle_setups(symbols, timeframes):
-    def scan_symbol(symbol, tf):
-        df = fetch_ohlcv(symbol, tf)
-        if df is None or len(df) < 5:
-            return None, None
-        curr_setup = check_cradle_setup(df, len(df) - 1)
-        prev_setup = check_cradle_setup(df, len(df) - 2)
-        return curr_setup, prev_setup
+    c1 = df.iloc[index - 2]  # Pullback candle
+    c2 = df.iloc[index - 1]  # Rest candle
 
-    with ThreadPoolExecutor() as tf_executor:
-        futures = {
-            tf_executor.submit(scan_timeframe, tf, symbols): tf for tf in timeframes
-        }
-        for future in as_completed(futures):
-            tf = futures[future]
-            try:
-                tf_result = future.result()
-                if tf_result:
-                    st.session_state.results[tf] = tf_result
-            except Exception as e:
-                st.warning(f"Error processing {tf}: {e}")
+    cradle_top = max(ema10.iloc[index - 2], ema20.iloc[index - 2])
+    cradle_bot = min(ema10.iloc[index - 2], ema20.iloc[index - 2])
 
-def scan_timeframe(tf, symbols):
-    current_setups = []
-    second_last_setups = []
-    status_line = st.empty()
-    progress_bar = st.progress(0)
-    eta_placeholder = st.empty()
-    time_taken_placeholder = st.empty()
-    total = len(symbols)
-    start_time = time.time()
+    c2_body = abs(c2['close'] - c2['open'])
+    c2_range = c2['high'] - c2['low']
+    c2_wick_ratio = (c2_range - c2_body) / c2_range if c2_range != 0 else 0
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_symbol = {
-            executor.submit(fetch_ohlcv, symbol, tf): symbol for symbol in symbols
-        }
-        for idx, future in enumerate(as_completed(future_to_symbol)):
-            symbol = future_to_symbol[future]
-            elapsed = time.time() - start_time
-            avg_time = elapsed / (idx + 1)
-            remaining_time = avg_time * (total - (idx + 1))
-            mins, secs = divmod(int(remaining_time), 60)
-            status_line.info(f"🔍 Scanning: {symbol} on {tf} ({idx+1}/{total})")
-            progress_bar.progress((idx + 1) / total)
-            eta_placeholder.markdown(f"⏳ Estimated time remaining: {mins}m {secs}s")
+    # Bullish signal (on close of candle 2)
+    if (
+        ema10.iloc[index - 2] > ema20.iloc[index - 2] and
+        c1['close'] < c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        c2_body < abs(c1['close'] - c1['open']) and
+        c2_wick_ratio > 0.5
+    ):
+        return 'Bullish'
 
-            df = future.result()
-            if df is None or len(df) < 5:
-                continue
+    # Bearish signal (on close of candle 2)
+    if (
+        ema10.iloc[index - 2] < ema20.iloc[index - 2] and
+        c1['close'] > c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        c2_body < abs(c1['close'] - c1['open']) and
+        c2_wick_ratio > 0.5
+    ):
+        return 'Bearish'
 
-            curr_setup = check_cradle_setup(df, len(df) - 1)
-            if curr_setup:
-                current_setups.append({
-                    'Symbol': symbol,
-                    'Timeframe': tf,
-                    'Setup': curr_setup,
-                    'Detected On': 'Current Candle'
-                })
+    return None
 
-            prev_setup = check_cradle_setup(df, len(df) - 2)
-            if prev_setup:
-                second_last_setups.append({
-                    'Symbol': symbol,
-                    'Timeframe': tf,
-                    'Setup': prev_setup,
-                    'Detected On': '2nd Last Candle'
-                })
+    c1 = df.iloc[index - 2]  # Pullback candle
+    c2 = df.iloc[index - 1]  # Rest candle
+    # Entry candle would be c3 = df.iloc[index] (but not used for signal now)
 
-    def show_results(setups, title):
-        if setups:
-            df_result = pd.DataFrame(setups)
-            longs = df_result[df_result['Setup'] == 'Bullish']
-            shorts = df_result[df_result['Setup'] == 'Bearish']
-            sorted_df = pd.concat([longs, shorts])
-            st.markdown(f"""
-                <div style='background-color: {background_color}; color: {text_color}; padding: 10px; border-radius: 10px;'>
-                    <h3>{title}</h3>
-                </div>
-            """, unsafe_allow_html=True)
-            st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
-        else:
-            st.markdown(f"**No setups found for {tf} – {title}**")
+    cradle_top = max(ema10.iloc[index - 2], ema20.iloc[index - 2])
+    cradle_bot = min(ema10.iloc[index - 2], ema20.iloc[index - 2])
 
-    show_results(current_setups, f"📈 Cradle Setups – {tf} (Current Candle)")
-    show_results(second_last_setups, f"🕒 Cradle Setups – {tf} (2nd Last Candle)")
+    # Bullish signal (produced on candle 2 close)
+    if (
+        ema10.iloc[index - 2] > ema20.iloc[index - 2] and
+        c1['close'] < c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        abs(c2['close'] - c2['open']) < abs(c1['close'] - c1['open'])
+    ):
+        return 'Bullish'
 
-    end_time = time.time()
-    tmin, tsec = divmod(int(end_time - start_time), 60)
-    time_taken_placeholder.success(f"✅ Finished scanning {tf} in {tmin}m {tsec}s")
+    # Bearish signal (produced on candle 2 close)
+    if (
+        ema10.iloc[index - 2] < ema20.iloc[index - 2] and
+        c1['close'] > c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        abs(c2['close'] - c2['open']) < abs(c1['close'] - c1['open'])
+    ):
+        return 'Bearish'
 
-    return {
-        "current": current_setups,
-        "second_last": second_last_setups
-    }
+    return None
 
-if st.session_state.results:
-            setups = st.session_state.results[tf]
-            def show_results(setups_list, title):
-                if setups_list:
-                    df_result = pd.DataFrame(setups_list)
-                    longs = df_result[df_result['Setup'] == 'Bullish']
-                    shorts = df_result[df_result['Setup'] == 'Bearish']
-                    sorted_df = pd.concat([longs, shorts])
-                    st.markdown(f"""
-                        <div style='background-color: {background_color}; color: {text_color}; padding: 10px; border-radius: 10px;'>
-                            <h3>{title}</h3>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
+    c1 = df.iloc[index - 2]  # Pullback candle
+    c2 = df.iloc[index - 1]  # Rest candle
+    c3 = df.iloc[index]      # Entry candle
 
-            show_results(setups["current"], f"📈 Cradle Setups – {tf} (Current Candle)")
-            show_results(setups["second_last"], f"🕒 Cradle Setups – {tf} (2nd Last Candle)")
+    cradle_top = max(ema10.iloc[index - 2], ema20.iloc[index - 2])
+    cradle_bot = min(ema10.iloc[index - 2], ema20.iloc[index - 2])
 
-if run_scan:
-    st.session_state.is_scanning = True
-    placeholder.info("Starting scan...")
-    with st.spinner("Scanning Bitget markets... Please wait..."):
-        markets = BITGET.load_markets()
-        symbols = [s for s in markets if '/USDT:USDT' in s and markets[s]['type'] == 'swap']
-        analyze_cradle_setups(symbols, selected_timeframes)
-    placeholder.success("Scan complete!")
-    st.session_state.is_scanning = False
+    # Bullish 3-candle pattern
+    if (
+        ema10.iloc[index - 2] > ema20.iloc[index - 2] and
+        c1['close'] < c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        abs(c2['close'] - c2['open']) < abs(c1['close'] - c1['open']) and
+        c3['close'] > c2['high']
+    ):
+        return 'Bullish'
 
-    # Show results after scan completes
-    st.markdown("### 📊 Showing scanned results")
-    for tf in selected_timeframes:
-        if tf in st.session_state.results:
-            setups = st.session_state.results[tf]
-            def show_results(setups_list, title):
-                if setups_list:
-                    df_result = pd.DataFrame(setups_list)
-                    longs = df_result[df_result['Setup'] == 'Bullish']
-                    shorts = df_result[df_result['Setup'] == 'Bearish']
-                    sorted_df = pd.concat([longs, shorts])
-                    st.markdown(f"""
-                        <div style='background-color: {background_color}; color: {text_color}; padding: 10px; border-radius: 10px;'>
-                            <h3>{title}</h3>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    st.dataframe(sorted_df.style.set_properties(**table_styles), use_container_width=True)
-                else:
-                    st.markdown(f"**No setups found for {tf} – {title}**")
+    # Bearish 3-candle pattern
+    if (
+        ema10.iloc[index - 2] < ema20.iloc[index - 2] and
+        c1['close'] > c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        abs(c2['close'] - c2['open']) < abs(c1['close'] - c1['open']) and
+        c3['close'] < c2['low']
+    ):
+        return 'Bearish'
 
-            show_results(setups["current"], f"📈 Cradle Setups – {tf} (Current Candle)")
-            show_results(setups["second_last"], f"🕒 Cradle Setups – {tf} (2nd Last Candle)")
-
+    return None
