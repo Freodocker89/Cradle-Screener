@@ -102,7 +102,72 @@ if should_trigger_scan():
 if auto_run and not st.session_state.is_scanning and not run_scan:
     st_autorefresh(interval=15000, limit=None, key="auto_cradle_refresh")
 
-# === Missing scan execution logic ===
+def fetch_ohlcv(symbol, timeframe, limit=100):
+    try:
+        ohlcv = BITGET.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        return df
+    except Exception:
+        return None
+
+def check_cradle_setup(df):
+    ema10 = df['close'].ewm(span=10).mean()
+    ema20 = df['close'].ewm(span=20).mean()
+
+    if len(df) < 3:
+        return None
+
+    c1, c2, c3 = df.iloc[-3], df.iloc[-2], df.iloc[-1]
+    e10_c1, e20_c1 = ema10.iloc[-3], ema20.iloc[-3]
+    cradle_top = max(e10_c1, e20_c1)
+    cradle_bot = min(e10_c1, e20_c1)
+
+    c1_body = abs(c1['close'] - c1['open'])
+    c2_body = abs(c2['close'] - c2['open'])
+    c2_range = c2['high'] - c2['low']
+    c2_total_wick = c2_range - c2_body
+
+    if (
+        e10_c1 > e20_c1 and
+        c1['close'] < c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        c2['close'] > c2['open'] and
+        c2_body < c1_body and
+        c2_total_wick < (c2_range * 0.5)
+    ):
+        return 'Bullish'
+
+    if (
+        e10_c1 < e20_c1 and
+        c1['close'] > c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        c2['close'] < c2['open'] and
+        c2_body < c1_body and
+        c2_total_wick < (c2_range * 0.5)
+    ):
+        return 'Bearish'
+
+    return None
+
+def analyze_cradle_setups(symbols, timeframes):
+    results = {}
+    for tf in timeframes:
+        tf_results = []
+        for symbol in symbols:
+            df = fetch_ohlcv(symbol, tf)
+            if df is None or len(df) < 5:
+                continue
+            signal = check_cradle_setup(df)
+            if signal:
+                tf_results.append({
+                    'Symbol': symbol,
+                    'Setup': signal,
+                    'Timeframe': tf
+                })
+        results[tf] = tf_results
+    return results
+
 if run_scan:
     st.session_state.is_scanning = True
     placeholder.info("Starting scan...")
@@ -110,13 +175,10 @@ if run_scan:
         markets = BITGET.load_markets()
         symbols = [s for s in markets if '/USDT:USDT' in s and markets[s]['type'] == 'swap']
         st.success(f"Scanning {len(symbols)} symbols across: {', '.join(selected_timeframes)}")
-        # Here you'd normally call your cradle scanning logic
-        # For now we mock a result:
-        st.session_state.results = {tf: [] for tf in selected_timeframes}
+        st.session_state.results = analyze_cradle_setups(symbols, selected_timeframes)
     placeholder.success("Scan complete!")
     st.session_state.is_scanning = False
 
-    # Show results (if any)
     for tf in selected_timeframes:
         st.subheader(f"Results for {tf}")
         results = st.session_state.results.get(tf, [])
@@ -124,3 +186,4 @@ if run_scan:
             st.dataframe(pd.DataFrame(results))
         else:
             st.info("No valid setups found.")
+
