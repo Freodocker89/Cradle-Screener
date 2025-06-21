@@ -154,17 +154,20 @@ def analyze_cradle_setups(symbols, timeframes):
     results = {}
     for tf in timeframes:
         tf_results = []
-        for symbol in symbols:
-            df = fetch_ohlcv(symbol, tf)
-            if df is None or len(df) < 5:
-                continue
-            signal = check_cradle_setup(df)
-            if signal:
-                tf_results.append({
-                    'Symbol': symbol,
-                    'Setup': signal,
-                    'Timeframe': tf
-                })
+        with ThreadPoolExecutor(max_workers=30) as executor:
+            futures = {executor.submit(fetch_ohlcv, symbol, tf): symbol for symbol in symbols}
+            for future in as_completed(futures):
+                symbol = futures[future]
+                df = future.result()
+                if df is None or len(df) < 5:
+                    continue
+                signal = check_cradle_setup(df)
+                if signal:
+                    tf_results.append({
+                        'Symbol': symbol,
+                        'Setup': signal,
+                        'Timeframe': tf
+                    })
         results[tf] = tf_results
     return results
 
