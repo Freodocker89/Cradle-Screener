@@ -61,6 +61,8 @@ table_styles = {
 st.title("Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
 
+small_candle_ratio = st.selectbox("Candle 2 max size (% of 25-bar avg range)", [25, 33, 50, 66, 75, 100], index=2) / 100
+
 auto_run = st.checkbox("⏱️ Auto Run on Candle Close", key="auto_run_checkbox")
 st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
 
@@ -134,7 +136,7 @@ def check_cradle_setup(df):
         c1['close'] < c1['open'] and
         cradle_bot <= c1['close'] <= cradle_top and
         c2['close'] > c2['open'] and
-        c2_range < 0.5 * avg_range_25
+        c2_range < small_candle_ratio * avg_range_25
     ):
         return 'Bullish'
 
@@ -143,7 +145,7 @@ def check_cradle_setup(df):
         c1['close'] > c1['open'] and
         cradle_bot <= c1['close'] <= cradle_top and
         c2['close'] < c2['open'] and
-        c2_range < 0.5 * avg_range_25
+        c2_range < small_candle_ratio * avg_range_25
     ):
         return 'Bearish'
 
