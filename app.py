@@ -80,6 +80,10 @@ if 'last_run_timestamp' not in st.session_state:
     st.session_state.last_run_timestamp = 0
 if 'results' not in st.session_state:
     st.session_state.results = {}
+if 'cached_market_caps' not in st.session_state:
+    st.session_state.cached_market_caps = None
+if 'market_caps_timestamp' not in st.session_state:
+    st.session_state.market_caps_timestamp = 0
 
 run_scan = False
 manual_triggered = st.button("Run Screener", key="manual_run_button")
@@ -120,8 +124,12 @@ def fetch_ohlcv(symbol, timeframe, limit=100):
         return None
 
 def fetch_market_caps():
+    now = time.time()
+    if st.session_state.cached_market_caps and now - st.session_state.market_caps_timestamp < 600:
+        return st.session_state.cached_market_caps
+
     market_caps = {}
-    for page in range(1, 5):  # up to 1000 assets
+    for page in range(1, 9):  # up to 2000 assets
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {
             "vs_currency": "usd",
@@ -138,6 +146,9 @@ def fetch_market_caps():
         except Exception as e:
             st.warning(f"Failed to fetch market caps (page {page}): {e}")
             break
+
+    st.session_state.cached_market_caps = market_caps
+    st.session_state.market_caps_timestamp = now
     return market_caps
 
 def format_market_cap(val):
