@@ -129,7 +129,7 @@ def fetch_market_caps():
         return st.session_state.cached_market_caps
 
     market_caps = {}
-    for page in range(1, 9):  # up to 2000 assets
+    for page in range(1, 17):  # up to 4000 assets
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {
             "vs_currency": "usd",
@@ -141,8 +141,12 @@ def fetch_market_caps():
         try:
             response = requests.get(url, params=params)
             data = response.json()
-            for item in data:
-                market_caps[item['symbol'].upper()] = (item['market_cap'], item['market_cap_rank'])
+            if isinstance(data, list):
+                for item in data:
+                    market_caps[item['symbol'].upper()] = (item['market_cap'], item['market_cap_rank'])
+            else:
+                st.warning(f"CoinGecko returned an error on page {page}: {data.get('error', 'Unknown error')}")
+                break
         except Exception as e:
             st.warning(f"Failed to fetch market caps (page {page}): {e}")
             break
