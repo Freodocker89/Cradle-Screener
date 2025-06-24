@@ -115,7 +115,7 @@ def check_cradle_setup(df):
     ema10 = df['close'].ewm(span=10).mean()
     ema20 = df['close'].ewm(span=20).mean()
 
-    if len(df) < 13:
+    if len(df) < 28:
         return None
 
     c1, c2, c3 = df.iloc[-3], df.iloc[-2], df.iloc[-1]
@@ -126,15 +126,15 @@ def check_cradle_setup(df):
     c1_body = abs(c1['close'] - c1['open'])
     c2_range = c2['high'] - c2['low']
 
-    last_10_ranges = df.iloc[-13:-3].apply(lambda row: row['high'] - row['low'], axis=1)
-    avg_range_10 = last_10_ranges.mean()
+    last_25_ranges = df.iloc[-28:-3].apply(lambda row: row['high'] - row['low'], axis=1)
+    avg_range_25 = last_25_ranges.mean()
 
     if (
         e10_c1 > e20_c1 and
         c1['close'] < c1['open'] and
         cradle_bot <= c1['close'] <= cradle_top and
         c2['close'] > c2['open'] and
-        c2_range < avg_range_10
+        c2_range < 0.5 * avg_range_25
     ):
         return 'Bullish'
 
@@ -143,7 +143,7 @@ def check_cradle_setup(df):
         c1['close'] > c1['open'] and
         cradle_bot <= c1['close'] <= cradle_top and
         c2['close'] < c2['open'] and
-        c2_range < avg_range_10
+        c2_range < 0.5 * avg_range_25
     ):
         return 'Bearish'
 
@@ -158,7 +158,7 @@ def analyze_cradle_setups(symbols, timeframes):
             for future in as_completed(futures):
                 symbol = futures[future]
                 df = future.result()
-                if df is None or len(df) < 13:
+                if df is None or len(df) < 28:
                     continue
                 signal = check_cradle_setup(df)
                 if signal:
