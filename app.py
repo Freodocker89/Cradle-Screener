@@ -50,6 +50,10 @@ st.markdown(f"""
         color: {text_color};
         background-color: transparent;
     }}
+    .css-1lcbmhc .e1fqkh3o10 {{
+        overflow: visible !important;
+        max-height: none !important;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -63,7 +67,7 @@ st.title("Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
 
 small_candle_ratio = st.selectbox("Candle 2 max size (% of 25-bar avg range)", [25, 33, 50, 66, 75, 100], index=2) / 100
-sort_option = st.selectbox("Sort Results By", ["Symbol", "Setup", "Timeframe", "MarketCap", "MarketCapRank"], index=0)
+sort_option = st.selectbox("Sort Results By", ["Symbol", "Setup", "MarketCap", "MarketCapRank"], index=0)
 
 auto_run = st.checkbox("⏱️ Auto Run on Candle Close", key="auto_run_checkbox")
 st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
@@ -116,21 +120,25 @@ def fetch_ohlcv(symbol, timeframe, limit=100):
         return None
 
 def fetch_market_caps():
-    url = "https://api.coingecko.com/api/v3/coins/markets"
-    params = {
-        "vs_currency": "usd",
-        "order": "market_cap_desc",
-        "per_page": 250,
-        "page": 1,
-        "sparkline": False
-    }
-    try:
-        response = requests.get(url, params=params)
-        data = response.json()
-        return {item['symbol'].upper(): (item['market_cap'], item['market_cap_rank']) for item in data}
-    except Exception as e:
-        st.warning(f"Failed to fetch market caps: {e}")
-        return {}
+    market_caps = {}
+    for page in range(1, 5):  # up to 1000 assets
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        params = {
+            "vs_currency": "usd",
+            "order": "market_cap_desc",
+            "per_page": 250,
+            "page": page,
+            "sparkline": False
+        }
+        try:
+            response = requests.get(url, params=params)
+            data = response.json()
+            for item in data:
+                market_caps[item['symbol'].upper()] = (item['market_cap'], item['market_cap_rank'])
+        except Exception as e:
+            st.warning(f"Failed to fetch market caps (page {page}): {e}")
+            break
+    return market_caps
 
 def format_market_cap(val):
     if val is None:
@@ -202,7 +210,6 @@ def analyze_cradle_setups(symbols, timeframes):
                     tf_results.append({
                         'Symbol': symbol,
                         'Setup': signal,
-                        'Timeframe': tf,
                         'MarketCap': format_market_cap(market_cap),
                         'MarketCapRank': market_cap_rank
                     })
@@ -227,8 +234,7 @@ if run_scan:
             df = pd.DataFrame(results)
             if sort_option in df.columns:
                 df = df.sort_values(by=sort_option, ascending=True, na_position='last')
-            st.dataframe(df)
+            st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.info("No valid setups found.")
-
 
