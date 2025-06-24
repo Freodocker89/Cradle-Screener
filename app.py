@@ -63,7 +63,7 @@ st.title("Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
 
 small_candle_ratio = st.selectbox("Candle 2 max size (% of 25-bar avg range)", [25, 33, 50, 66, 75, 100], index=2) / 100
-sort_option = st.selectbox("Sort Results By", ["Symbol", "Setup", "Timeframe", "MarketCap"], index=0)
+sort_option = st.selectbox("Sort Results By", ["Symbol", "Setup", "Timeframe", "MarketCap", "MarketCapRank"], index=0)
 
 auto_run = st.checkbox("⏱️ Auto Run on Candle Close", key="auto_run_checkbox")
 st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
@@ -127,10 +127,21 @@ def fetch_market_caps():
     try:
         response = requests.get(url, params=params)
         data = response.json()
-        return {item['symbol'].upper(): item['market_cap'] for item in data}
+        return {item['symbol'].upper(): (item['market_cap'], item['market_cap_rank']) for item in data}
     except Exception as e:
         st.warning(f"Failed to fetch market caps: {e}")
         return {}
+
+def format_market_cap(val):
+    if val is None:
+        return None
+    if val >= 1e9:
+        return f"${val/1e9:.2f}B"
+    elif val >= 1e6:
+        return f"${val/1e6:.2f}M"
+    elif val >= 1e3:
+        return f"${val/1e3:.2f}K"
+    return f"${val:.0f}"
 
 def check_cradle_setup(df):
     ema10 = df['close'].ewm(span=10).mean()
@@ -185,12 +196,15 @@ def analyze_cradle_setups(symbols, timeframes):
                 signal = check_cradle_setup(df)
                 if signal:
                     sym_key = symbol.split('/')[0].replace(':USDT', '').upper()
-                    market_cap = market_caps.get(sym_key)
+                    cap_data = market_caps.get(sym_key)
+                    market_cap = cap_data[0] if cap_data else None
+                    market_cap_rank = cap_data[1] if cap_data else None
                     tf_results.append({
                         'Symbol': symbol,
                         'Setup': signal,
                         'Timeframe': tf,
-                        'MarketCap': market_cap
+                        'MarketCap': format_market_cap(market_cap),
+                        'MarketCapRank': market_cap_rank
                     })
         results[tf] = tf_results
     return results
@@ -216,4 +230,5 @@ if run_scan:
             st.dataframe(df)
         else:
             st.info("No valid setups found.")
+
 
