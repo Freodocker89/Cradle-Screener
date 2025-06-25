@@ -264,7 +264,7 @@ if run_scan:
             df = pd.DataFrame(results)
             if sort_option in df.columns:
                 df = df.sort_values(by=sort_option, ascending=True, na_position='last')
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.table(df)
         else:
             st.info("No valid setups found.")
 
