@@ -54,15 +54,6 @@ st.markdown(f"""
         overflow: visible !important;
         max-height: none !important;
     }}
-    .dataframe td:has(div:contains('Bullish')) {{
-        color: green;
-    }}
-    .dataframe td:has(div:contains('Bearish')) {{
-        color: red;
-    }}
-    .dataframe td:has(div:contains('%')) {{
-        text-align: right;
-    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -77,6 +68,9 @@ selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, de
 
 small_candle_ratio = st.selectbox("Candle 2 max size (% of 25-bar avg range)", [25, 33, 50, 66, 75, 100], index=2) / 100
 sort_option = st.selectbox("Sort Results By", ["Symbol", "Setup", "MarketCap", "MarketCapRank"], index=0)
+
+auto_run = st.checkbox("⏱️ Auto Run on Candle Close", key="auto_run_checkbox")
+st.write("This screener shows valid Cradle setups detected on the last fully closed candle only.")
 
 placeholder = st.empty()
 
@@ -94,9 +88,31 @@ if 'market_caps_timestamp' not in st.session_state:
 run_scan = False
 manual_triggered = st.button("Run Screener", key="manual_run_button")
 
-if manual_triggered:
+def should_auto_run():
+    now = datetime.datetime.utcnow()
+    now_ts = int(now.timestamp())
+    for tf in selected_timeframes:
+        unit = tf[-1]
+        value = int(tf[:-1])
+        if unit == 'm': tf_seconds = value * 60
+        elif unit == 'h': tf_seconds = value * 3600
+        elif unit == 'd': tf_seconds = value * 86400
+        elif unit == 'w': tf_seconds = value * 604800
+        else: continue
+        if (now_ts % tf_seconds) < 30 and (now_ts - st.session_state.last_run_timestamp) > tf_seconds - 30:
+            st.session_state.last_run_timestamp = now_ts
+            return True
+    return False
+
+def should_trigger_scan():
+    return manual_triggered or (auto_run and should_auto_run())
+
+if should_trigger_scan():
     run_scan = True
     st.session_state.is_scanning = True
+
+if auto_run and not st.session_state.is_scanning and not run_scan:
+    st_autorefresh(interval=15000, limit=None, key="auto_cradle_refresh")
 
 def fetch_ohlcv(symbol, timeframe, limit=100):
     try:
@@ -107,104 +123,150 @@ def fetch_ohlcv(symbol, timeframe, limit=100):
     except Exception:
         return None
 
-def check_cradle_setup(df, index):
+def fetch_market_caps():
+    now = time.time()
+    if st.session_state.cached_market_caps and now - st.session_state.market_caps_timestamp < 86400:
+        return st.session_state.cached_market_caps
+
+    market_caps = {}
+    headers = {"X-CMC_PRO_API_KEY": st.secrets["CMC_API_KEY"]}
+    for start in range(1, 2001, 100):  # Up to 2000 assets
+        url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
+        params = {"start": start, "limit": 100, "convert": "USD"}
+        for attempt in range(3):
+            try:
+                response = requests.get(url, headers=headers, params=params)
+                data = response.json()
+                if 'data' in data:
+                    for item in data['data']:
+                        symbol = item['symbol'].upper()
+                        quote = item['quote']['USD']
+                        market_caps[symbol] = (
+                            quote.get('market_cap'),
+                            item.get('cmc_rank'),
+                            quote.get('volume_24h'),
+                            quote.get('percent_change_1h'),
+                            quote.get('percent_change_24h'),
+                            quote.get('percent_change_7d')
+                        )
+                    break
+                else:
+                    st.warning(f"CMC error @ start {start}: {data.get('status', {}).get('error_message', 'Unknown error')}")
+                    break
+            except Exception as e:
+                if attempt == 2:
+                    st.warning(f"Failed to fetch market caps (start {start}): {e}")
+                time.sleep(1.5)
+
+    st.session_state.cached_market_caps = market_caps
+    st.session_state.market_caps_timestamp = now
+    return market_caps
+
+def format_market_cap(val):
+    if val is None:
+        return None
+    if val >= 1e9:
+        return f"${val/1e9:.2f}B"
+    elif val >= 1e6:
+        return f"${val/1e6:.2f}M"
+    elif val >= 1e3:
+        return f"${val/1e3:.2f}K"
+    return f"${val:.0f}"
+
+def format_volume(val):
+    if val is None:
+        return None
+    if val >= 1e9:
+        return f"${val/1e9:.2f}B"
+    elif val >= 1e6:
+        return f"${val/1e6:.2f}M"
+    elif val >= 1e3:
+        return f"${val/1e3:.2f}K"
+    return f"${val:.0f}"
+
+def classify_liquidity(vol):
+    if vol is None:
+        return "❓ Unknown"
+    elif vol > 100_000_000:
+        return "✅ High"
+    elif vol > 10_000_000:
+        return "⚠️ Medium"
+    else:
+        return "❌ Low"
+
+def check_cradle_setup(df):
     ema10 = df['close'].ewm(span=10).mean()
     ema20 = df['close'].ewm(span=20).mean()
 
-    if index < 2 or index >= len(df):
+    if len(df) < 28:
         return None
 
-    candle1 = df.iloc[index - 2]
-    candle2 = df.iloc[index - 1]
+    c1, c2, c3 = df.iloc[-3], df.iloc[-2], df.iloc[-1]
+    e10_c1, e20_c1 = ema10.iloc[-3], ema20.iloc[-3]
+    cradle_top = max(e10_c1, e20_c1)
+    cradle_bot = min(e10_c1, e20_c1)
 
-    cradle_top_prev = max(ema10.iloc[index - 2], ema20.iloc[index - 2])
-    cradle_bot_prev = min(ema10.iloc[index - 2], ema20.iloc[index - 2])
+    c1_body = abs(c1['close'] - c1['open'])
+    c2_range = c2['high'] - c2['low']
 
-    avg_range = (df['high'] - df['low']).rolling(25).mean()
-    c2_range = candle2['high'] - candle2['low']
-
-    is_small_candle = c2_range <= (avg_range.iloc[index - 1] * small_candle_ratio)
+    last_25_ranges = df.iloc[-28:-3].apply(lambda row: row['high'] - row['low'], axis=1)
+    avg_range_25 = last_25_ranges.mean()
 
     if (
-        ema10.iloc[index - 2] > ema20.iloc[index - 2] and
-        candle1['close'] < candle1['open'] and
-        cradle_bot_prev <= candle1['close'] <= cradle_top_prev and
-        candle2['close'] > candle2['open'] and
-        is_small_candle
+        e10_c1 > e20_c1 and
+        c1['close'] < c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        c2['close'] > c2['open'] and
+        c2_range < small_candle_ratio * avg_range_25
     ):
         return 'Bullish'
 
     if (
-        ema10.iloc[index - 2] < ema20.iloc[index - 2] and
-        candle1['close'] > candle1['open'] and
-        cradle_bot_prev <= candle1['close'] <= cradle_top_prev and
-        candle2['close'] < candle2['open'] and
-        is_small_candle
+        e10_c1 < e20_c1 and
+        c1['close'] > c1['open'] and
+        cradle_bot <= c1['close'] <= cradle_top and
+        c2['close'] < c2['open'] and
+        c2_range < small_candle_ratio * avg_range_25
     ):
         return 'Bearish'
 
     return None
 
-def process_symbol_tf(symbol, tf):
-    df = fetch_ohlcv(symbol, tf)
-    if df is None or len(df) < 30:
-        return tf, None
-    setup = check_cradle_setup(df, len(df) - 1)
-    if setup:
-        return tf, {
-            'Symbol': symbol,
-            'Setup': setup
-        }
-    return tf, None
-
 def analyze_cradle_setups(symbols, timeframes):
-    start_time = time.time()
-    results = {tf: [] for tf in timeframes}
-    futures = []
-
-    with ThreadPoolExecutor(max_workers=25) as executor:
-        for tf in timeframes:
-            for symbol in symbols:
-                futures.append(
-                    executor.submit(process_symbol_tf, symbol, tf)
-                )
-
-        for idx, future in enumerate(as_completed(futures)):
-            tf, result = future.result()
-            if result:
-                results[tf].append(result)
-
-            elapsed = int(time.time() - start_time)
-            placeholder.markdown(f"⏱️ Scanning {idx+1}/{len(futures)} — Elapsed: {elapsed}s")
-
-    st.session_state.results = results
-
-def display_results():
-    for tf, results in st.session_state.results.items():
-        if not results:
-            st.markdown(f"### {tf} — No Setups Found")
-            continue
-
-        df = pd.DataFrame(results)
-
-        df['MarketCap'] = 0
-        df['MarketCapRank'] = 0
-        df['Volume (24h)'] = 0
-        df['Liquidity'] = ''
-        df['% Change 1h'] = 0
-        df['% Change 24h'] = 0
-        df['% Change 7d'] = 0
-
-        df['% Change 1h'] = df['% Change 1h'].map(lambda x: f"{x:.2f}%")
-        df['% Change 24h'] = df['% Change 24h'].map(lambda x: f"{x:.2f}%")
-        df['% Change 7d'] = df['% Change 7d'].map(lambda x: f"{x:.2f}%")
-
-        if sort_option in df.columns:
-            df = df.sort_values(by=sort_option)
-
-        st.markdown(f"## {tf}")
-        df = df.drop(columns=['Timeframe'], errors='ignore')
-        st.dataframe(df.style.set_properties(**table_styles), use_container_width=True)
+    market_caps = fetch_market_caps()
+    results = {}
+    for tf in timeframes:
+        tf_results = []
+        with ThreadPoolExecutor(max_workers=30) as executor:
+            futures = {executor.submit(fetch_ohlcv, symbol, tf): symbol for symbol in symbols}
+            for future in as_completed(futures):
+                symbol = futures[future]
+                df = future.result()
+                if df is None or len(df) < 28:
+                    continue
+                signal = check_cradle_setup(df)
+                if signal:
+                    sym_key = symbol.split('/')[0].replace(':USDT', '').upper()
+                    cap_data = market_caps.get(sym_key)
+                    market_cap = cap_data[0] if cap_data else None
+                    market_cap_rank = cap_data[1] if cap_data else None
+                    volume_24h = cap_data[2] if cap_data else None
+                    percent_change_1h = cap_data[3] if cap_data else None
+                    percent_change_24h = cap_data[4] if cap_data else None
+                    percent_change_7d = cap_data[5] if cap_data else None
+                    tf_results.append({
+                        'Symbol': symbol,
+                        'Setup': signal,
+                        'MarketCap': format_market_cap(market_cap),
+                        'MarketCapRank': market_cap_rank,
+                        'Volume (24h)': format_volume(volume_24h),
+                        'Liquidity': classify_liquidity(volume_24h),
+                        '% Change 1h': percent_change_1h,
+                        '% Change 24h': percent_change_24h,
+                        '% Change 7d': percent_change_7d
+                    })
+        results[tf] = tf_results
+    return results
 
 if run_scan:
     st.session_state.is_scanning = True
@@ -212,8 +274,18 @@ if run_scan:
     with st.spinner("Scanning Bitget markets... Please wait..."):
         markets = BITGET.load_markets()
         symbols = [s for s in markets if '/USDT:USDT' in s and markets[s]['type'] == 'swap']
-        analyze_cradle_setups(symbols, selected_timeframes)
+        st.success(f"Scanning {len(symbols)} symbols across: {', '.join(selected_timeframes)}")
+        st.session_state.results = analyze_cradle_setups(symbols, selected_timeframes)
     placeholder.success("Scan complete!")
-    display_results()
     st.session_state.is_scanning = False
 
+    for tf in selected_timeframes:
+        st.subheader(f"Results for {tf}")
+        results = st.session_state.results.get(tf, [])
+        if results:
+            df = pd.DataFrame(results)
+            if sort_option in df.columns:
+                df = df.sort_values(by=sort_option, ascending=True, na_position='last')
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No valid setups found.")
