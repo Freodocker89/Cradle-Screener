@@ -63,6 +63,9 @@ st.markdown(f"""
     .dataframe td:has(div:contains('%')) {{
         text-align: right;
     }}
+    .stDataFrameContainer {{
+        overflow: visible !important;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
