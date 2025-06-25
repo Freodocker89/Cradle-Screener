@@ -125,11 +125,11 @@ def fetch_ohlcv(symbol, timeframe, limit=100):
 
 def fetch_market_caps():
     now = time.time()
-    if st.session_state.cached_market_caps and now - st.session_state.market_caps_timestamp < 600:
+    if st.session_state.cached_market_caps and now - st.session_state.market_caps_timestamp < 3600:
         return st.session_state.cached_market_caps
 
     market_caps = {}
-    for page in range(1, 17):  # up to 4000 assets
+    for page in range(1, 9):  # up to 2000 assets
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {
             "vs_currency": "usd",
@@ -138,22 +138,26 @@ def fetch_market_caps():
             "page": page,
             "sparkline": False
         }
-        try:
-            response = requests.get(url, params=params)
-            data = response.json()
-            if isinstance(data, list):
-                for item in data:
-                    market_caps[item['symbol'].upper()] = (item['market_cap'], item['market_cap_rank'])
-            else:
-                st.warning(f"CoinGecko returned an error on page {page}: {data.get('error', 'Unknown error')}")
-                break
-        except Exception as e:
-            st.warning(f"Failed to fetch market caps (page {page}): {e}")
-            break
+        for attempt in range(3):
+            try:
+                response = requests.get(url, params=params)
+                data = response.json()
+                if isinstance(data, list):
+                    for item in data:
+                        market_caps[item['symbol'].upper()] = (item['market_cap'], item['market_cap_rank'])
+                    break  # success
+                else:
+                    st.warning(f"CoinGecko returned an error on page {page}: {data.get('error', 'Unknown error')}")
+                    break
+            except Exception as e:
+                if attempt == 2:
+                    st.warning(f"Failed to fetch market caps (page {page}): {e}")
+                time.sleep(1.5)
 
     st.session_state.cached_market_caps = market_caps
     st.session_state.market_caps_timestamp = now
     return market_caps
+
 
 def format_market_cap(val):
     if val is None:
@@ -252,5 +256,4 @@ if run_scan:
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.info("No valid setups found.")
-
 
