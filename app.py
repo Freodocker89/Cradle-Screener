@@ -140,7 +140,12 @@ def fetch_market_caps():
                 if 'data' in data:
                     for item in data['data']:
                         symbol = item['symbol'].upper()
-                        market_caps[symbol] = (item['quote']['USD']['market_cap'], item['cmc_rank'])
+                        quote = item['quote']['USD']
+                        market_caps[symbol] = (
+                            quote.get('market_cap'),
+                            item.get('cmc_rank'),
+                            quote.get('volume_24h')
+                        )
                     break
                 else:
                     st.warning(f"CMC error @ start {start}: {data.get('status', {}).get('error_message', 'Unknown error')}")
@@ -154,7 +159,6 @@ def fetch_market_caps():
     st.session_state.market_caps_timestamp = now
     return market_caps
 
-
 def format_market_cap(val):
     if val is None:
         return None
@@ -165,6 +169,27 @@ def format_market_cap(val):
     elif val >= 1e3:
         return f"${val/1e3:.2f}K"
     return f"${val:.0f}"
+
+def format_volume(val):
+    if val is None:
+        return None
+    if val >= 1e9:
+        return f"${val/1e9:.2f}B"
+    elif val >= 1e6:
+        return f"${val/1e6:.2f}M"
+    elif val >= 1e3:
+        return f"${val/1e3:.2f}K"
+    return f"${val:.0f}"
+
+def classify_liquidity(vol):
+    if vol is None:
+        return "❓ Unknown"
+    elif vol > 100_000_000:
+        return "✅ High"
+    elif vol > 10_000_000:
+        return "⚠️ Medium"
+    else:
+        return "❌ Low"
 
 def check_cradle_setup(df):
     ema10 = df['close'].ewm(span=10).mean()
@@ -222,11 +247,14 @@ def analyze_cradle_setups(symbols, timeframes):
                     cap_data = market_caps.get(sym_key)
                     market_cap = cap_data[0] if cap_data else None
                     market_cap_rank = cap_data[1] if cap_data else None
+                    volume_24h = cap_data[2] if cap_data else None
                     tf_results.append({
                         'Symbol': symbol,
                         'Setup': signal,
                         'MarketCap': format_market_cap(market_cap),
-                        'MarketCapRank': market_cap_rank
+                        'MarketCapRank': market_cap_rank,
+                        'Volume (24h)': format_volume(volume_24h),
+                        'Liquidity': classify_liquidity(volume_24h)
                     })
         results[tf] = tf_results
     return results
