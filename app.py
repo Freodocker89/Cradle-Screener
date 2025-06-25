@@ -153,7 +153,6 @@ def process_symbol_tf(symbol, tf):
     if setup:
         return tf, {
             'Symbol': symbol,
-            'Timeframe': tf,
             'Setup': setup
         }
     return tf, None
@@ -203,7 +202,8 @@ def display_results():
         if sort_option in df.columns:
             df = df.sort_values(by=sort_option)
 
-        st.markdown(f"## Timeframe: {tf}")
+        st.markdown(f"## {tf}")
+        df = df.drop(columns=['Timeframe'], errors='ignore')
         st.dataframe(df.style.set_properties(**table_styles), use_container_width=True)
 
 if run_scan:
