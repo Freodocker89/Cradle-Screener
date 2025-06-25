@@ -107,6 +107,70 @@ def fetch_ohlcv(symbol, timeframe, limit=100):
     except Exception:
         return None
 
+def fetch_market_caps():
+    now = time.time()
+    if st.session_state.cached_market_caps and now - st.session_state.market_caps_timestamp < 86400:
+        return st.session_state.cached_market_caps
+
+    market_caps = {}
+    headers = {"X-CMC_PRO_API_KEY": st.secrets["CMC_API_KEY"]}
+    for start in range(1, 2001, 100):
+        url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
+        params = {"start": start, "limit": 100, "convert": "USD"}
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            data = response.json()
+            if 'data' in data:
+                for item in data['data']:
+                    symbol = item['symbol'].upper()
+                    quote = item['quote']['USD']
+                    market_caps[symbol] = (
+                        quote.get('market_cap'),
+                        item.get('cmc_rank'),
+                        quote.get('volume_24h'),
+                        quote.get('percent_change_1h'),
+                        quote.get('percent_change_24h'),
+                        quote.get('percent_change_7d')
+                    )
+        except Exception:
+            continue
+
+    st.session_state.cached_market_caps = market_caps
+    st.session_state.market_caps_timestamp = now
+    return market_caps
+
+def format_market_cap(val):
+    if val is None:
+        return None
+    if val >= 1e9:
+        return f"${val/1e9:.2f}B"
+    elif val >= 1e6:
+        return f"${val/1e6:.2f}M"
+    elif val >= 1e3:
+        return f"${val/1e3:.2f}K"
+    return f"${val:.0f}"
+
+def format_volume(val):
+    if val is None:
+        return None
+    if val >= 1e9:
+        return f"${val/1e9:.2f}B"
+    elif val >= 1e6:
+        return f"${val/1e6:.2f}M"
+    elif val >= 1e3:
+        return f"${val/1e3:.2f}K"
+    return f"${val:.0f}"
+
+def classify_liquidity(vol):
+    if vol is None:
+        return "❓ Unknown"
+    elif vol > 100_000_000:
+        return "✅ High"
+    elif vol > 10_000_000:
+        return "⚠️ Medium"
+    else:
+        return "❌ Low"
+
 def check_cradle_setup(df, index):
     ema10 = df['close'].ewm(span=10).mean()
     ema20 = df['close'].ewm(span=20).mean()
@@ -158,6 +222,7 @@ def process_symbol_tf(symbol, tf):
     return tf, None
 
 def analyze_cradle_setups(symbols, timeframes):
+    market_caps = fetch_market_caps()
     start_time = time.time()
     results = {tf: [] for tf in timeframes}
     futures = []
@@ -172,6 +237,16 @@ def analyze_cradle_setups(symbols, timeframes):
         for idx, future in enumerate(as_completed(futures)):
             tf, result = future.result()
             if result:
+                sym_key = result['Symbol'].split('/')[0].replace(':USDT', '').upper()
+                cap_data = market_caps.get(sym_key)
+                if cap_data:
+                    result['MarketCap'] = format_market_cap(cap_data[0])
+                    result['MarketCapRank'] = cap_data[1]
+                    result['Volume (24h)'] = format_volume(cap_data[2])
+                    result['Liquidity'] = classify_liquidity(cap_data[2])
+                    result['% Change 1h'] = f"{cap_data[3]:.2f}%"
+                    result['% Change 24h'] = f"{cap_data[4]:.2f}%"
+                    result['% Change 7d'] = f"{cap_data[5]:.2f}%"
                 results[tf].append(result)
 
             elapsed = int(time.time() - start_time)
@@ -186,18 +261,6 @@ def display_results():
             continue
 
         df = pd.DataFrame(results)
-
-        df['MarketCap'] = 0
-        df['MarketCapRank'] = 0
-        df['Volume (24h)'] = 0
-        df['Liquidity'] = ''
-        df['% Change 1h'] = 0
-        df['% Change 24h'] = 0
-        df['% Change 7d'] = 0
-
-        df['% Change 1h'] = df['% Change 1h'].map(lambda x: f"{x:.2f}%")
-        df['% Change 24h'] = df['% Change 24h'].map(lambda x: f"{x:.2f}%")
-        df['% Change 7d'] = df['% Change 7d'].map(lambda x: f"{x:.2f}%")
 
         if sort_option in df.columns:
             df = df.sort_values(by=sort_option)
