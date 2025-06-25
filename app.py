@@ -125,33 +125,29 @@ def fetch_ohlcv(symbol, timeframe, limit=100):
 
 def fetch_market_caps():
     now = time.time()
-    if st.session_state.cached_market_caps and now - st.session_state.market_caps_timestamp < 3600:
+    if st.session_state.cached_market_caps and now - st.session_state.market_caps_timestamp < 86400:
         return st.session_state.cached_market_caps
 
     market_caps = {}
-    for page in range(1, 9):  # up to 2000 assets
-        url = "https://api.coingecko.com/api/v3/coins/markets"
-        params = {
-            "vs_currency": "usd",
-            "order": "market_cap_desc",
-            "per_page": 250,
-            "page": page,
-            "sparkline": False
-        }
+    headers = {"X-CMC_PRO_API_KEY": st.secrets["CMC_API_KEY"]}
+    for start in range(1, 2001, 100):  # Up to 2000 assets
+        url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
+        params = {"start": start, "limit": 100, "convert": "USD"}
         for attempt in range(3):
             try:
-                response = requests.get(url, params=params)
+                response = requests.get(url, headers=headers, params=params)
                 data = response.json()
-                if isinstance(data, list):
-                    for item in data:
-                        market_caps[item['symbol'].upper()] = (item['market_cap'], item['market_cap_rank'])
-                    break  # success
+                if 'data' in data:
+                    for item in data['data']:
+                        symbol = item['symbol'].upper()
+                        market_caps[symbol] = (item['quote']['USD']['market_cap'], item['cmc_rank'])
+                    break
                 else:
-                    st.warning(f"CoinGecko returned an error on page {page}: {data.get('error', 'Unknown error')}")
+                    st.warning(f"CMC error @ start {start}: {data.get('status', {}).get('error_message', 'Unknown error')}")
                     break
             except Exception as e:
                 if attempt == 2:
-                    st.warning(f"Failed to fetch market caps (page {page}): {e}")
+                    st.warning(f"Failed to fetch market caps (start {start}): {e}")
                 time.sleep(1.5)
 
     st.session_state.cached_market_caps = market_caps
