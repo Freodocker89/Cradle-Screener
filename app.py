@@ -98,7 +98,6 @@ if manual_triggered:
     run_scan = True
     st.session_state.is_scanning = True
 
-
 def fetch_ohlcv(symbol, timeframe, limit=100):
     try:
         ohlcv = BITGET.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
@@ -107,7 +106,6 @@ def fetch_ohlcv(symbol, timeframe, limit=100):
         return df
     except Exception:
         return None
-
 
 def check_cradle_setup(df, index):
     ema10 = df['close'].ewm(span=10).mean()
@@ -147,36 +145,40 @@ def check_cradle_setup(df, index):
 
     return None
 
+def process_symbol_tf(symbol, tf):
+    df = fetch_ohlcv(symbol, tf)
+    if df is None or len(df) < 30:
+        return tf, None
+    setup = check_cradle_setup(df, len(df) - 1)
+    if setup:
+        return tf, {
+            'Symbol': symbol,
+            'Timeframe': tf,
+            'Setup': setup
+        }
+    return tf, None
 
 def analyze_cradle_setups(symbols, timeframes):
     start_time = time.time()
-    for tf in timeframes:
-        current_setups = []
-        status_line = st.empty()
-        time_display = st.empty()
-        progress_bar = st.progress(0)
-        total = len(symbols)
+    results = {tf: [] for tf in timeframes}
+    futures = []
 
-        for idx, symbol in enumerate(symbols):
-            status_line.info(f"🔍 Scanning: {symbol} on {tf} ({idx+1}/{total})")
+    with ThreadPoolExecutor(max_workers=25) as executor:
+        for tf in timeframes:
+            for symbol in symbols:
+                futures.append(
+                    executor.submit(process_symbol_tf, symbol, tf)
+                )
+
+        for idx, future in enumerate(as_completed(futures)):
+            tf, result = future.result()
+            if result:
+                results[tf].append(result)
+
             elapsed = int(time.time() - start_time)
-            time_display.markdown(f"⏱️ Elapsed: {elapsed}s")
-            progress_bar.progress((idx + 1) / total)
+            placeholder.markdown(f"⏱️ Scanning {idx+1}/{len(futures)} — Elapsed: {elapsed}s")
 
-            df = fetch_ohlcv(symbol, tf)
-            if df is None or len(df) < 30:
-                continue
-
-            setup = check_cradle_setup(df, len(df) - 1)
-            if setup:
-                current_setups.append({
-                    'Symbol': symbol,
-                    'Timeframe': tf,
-                    'Setup': setup
-                })
-
-        st.session_state.results[tf] = current_setups
-
+    st.session_state.results = results
 
 def display_results():
     for tf, results in st.session_state.results.items():
@@ -186,7 +188,6 @@ def display_results():
 
         df = pd.DataFrame(results)
 
-        # Add dummy market cap + volume + percent change for now (replace with real later)
         df['MarketCap'] = 0
         df['MarketCapRank'] = 0
         df['Volume (24h)'] = 0
@@ -195,12 +196,15 @@ def display_results():
         df['% Change 24h'] = 0
         df['% Change 7d'] = 0
 
+        df['% Change 1h'] = df['% Change 1h'].map(lambda x: f"{x:.2f}%")
+        df['% Change 24h'] = df['% Change 24h'].map(lambda x: f"{x:.2f}%")
+        df['% Change 7d'] = df['% Change 7d'].map(lambda x: f"{x:.2f}%")
+
         if sort_option in df.columns:
             df = df.sort_values(by=sort_option)
 
         st.markdown(f"## Timeframe: {tf}")
         st.dataframe(df.style.set_properties(**table_styles), use_container_width=True)
-
 
 if run_scan:
     st.session_state.is_scanning = True
