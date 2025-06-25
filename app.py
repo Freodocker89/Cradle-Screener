@@ -101,22 +101,33 @@ if manual_triggered:
     run_scan = True
     st.session_state.is_scanning = True
 
+    countdown = st.empty()
+    start_time = time.time()
+
     with st.spinner("Scanning markets... please wait..."):
-        scan_duration = 20  # estimate total scan time
-        countdown = st.empty()
-        for i in range(scan_duration, 0, -1):
-            countdown.info(f"⏳ Scanning... {i} second(s) remaining")
+        markets = BITGET.load_markets()
+        symbols = [s for s in markets if '/USDT:USDT' in s and markets[s]['type'] == 'swap']
+        for sec in range(9999):
+            elapsed = int(time.time() - start_time)
+            countdown.info(f"⏳ Scanning... {elapsed} second(s) elapsed")
+            if elapsed >= 2:
+                break
             time.sleep(1)
         countdown.empty()
+        st.success(f"Scanning {len(symbols)} symbols across: {', '.join(selected_timeframes)}")
+        st.session_state.results = analyze_cradle_setups(symbols, selected_timeframes)
+    st.session_state.is_scanning = False
 
-def fetch_ohlcv(symbol, timeframe, limit=100):
-    try:
-        ohlcv = BITGET.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        return df
-    except Exception:
-        return None
+    for tf in selected_timeframes:
+        st.subheader(f"Results for {tf}")
+        results = st.session_state.results.get(tf, [])
+        if results:
+            df = pd.DataFrame(results)
+            if sort_option in df.columns:
+                df = df.sort_values(by=sort_option, ascending=True, na_position='last')
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No valid setups found.")
 
 def fetch_market_caps():
     now = time.time()
@@ -128,23 +139,30 @@ def fetch_market_caps():
     for start in range(1, 2001, 100):
         url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
         params = {"start": start, "limit": 100, "convert": "USD"}
-        try:
-            response = requests.get(url, headers=headers, params=params)
-            data = response.json()
-            if 'data' in data:
-                for item in data['data']:
-                    symbol = item['symbol'].upper()
-                    quote = item['quote']['USD']
-                    market_caps[symbol] = (
-                        quote.get('market_cap'),
-                        item.get('cmc_rank'),
-                        quote.get('volume_24h'),
-                        quote.get('percent_change_1h'),
-                        quote.get('percent_change_24h'),
-                        quote.get('percent_change_7d')
-                    )
-        except:
-            time.sleep(1.5)
+        for attempt in range(3):
+            try:
+                response = requests.get(url, headers=headers, params=params)
+                data = response.json()
+                if 'data' in data:
+                    for item in data['data']:
+                        symbol = item['symbol'].upper()
+                        quote = item['quote']['USD']
+                        market_caps[symbol] = (
+                            quote.get('market_cap'),
+                            item.get('cmc_rank'),
+                            quote.get('volume_24h'),
+                            quote.get('percent_change_1h'),
+                            quote.get('percent_change_24h'),
+                            quote.get('percent_change_7d')
+                        )
+                    break
+                else:
+                    st.warning(f"CMC error @ start {start}: {data.get('status', {}).get('error_message', 'Unknown error')}")
+                    break
+            except Exception as e:
+                if attempt == 2:
+                    st.warning(f"Failed to fetch market caps (start {start}): {e}")
+                time.sleep(1.5)
 
     st.session_state.cached_market_caps = market_caps
     st.session_state.market_caps_timestamp = now
@@ -195,7 +213,8 @@ def check_cradle_setup(df):
     cradle_bot = min(e10_c1, e20_c1)
 
     c2_range = c2['high'] - c2['low']
-    avg_range_25 = df.iloc[-28:-3].apply(lambda r: r['high'] - r['low'], axis=1).mean()
+    last_25_ranges = df.iloc[-28:-3].apply(lambda row: row['high'] - row['low'], axis=1)
+    avg_range_25 = last_25_ranges.mean()
 
     if (
         e10_c1 > e20_c1 and
@@ -217,6 +236,15 @@ def check_cradle_setup(df):
 
     return None
 
+def fetch_ohlcv(symbol, timeframe, limit=100):
+    try:
+        ohlcv = BITGET.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        return df
+    except Exception:
+        return None
+
 def analyze_cradle_setups(symbols, timeframes):
     market_caps = fetch_market_caps()
     results = {}
@@ -233,37 +261,23 @@ def analyze_cradle_setups(symbols, timeframes):
                 if signal:
                     sym_key = symbol.split('/')[0].replace(':USDT', '').upper()
                     cap_data = market_caps.get(sym_key)
+                    market_cap = cap_data[0] if cap_data else None
+                    market_cap_rank = cap_data[1] if cap_data else None
+                    volume_24h = cap_data[2] if cap_data else None
+                    percent_change_1h = cap_data[3] if cap_data else None
+                    percent_change_24h = cap_data[4] if cap_data else None
+                    percent_change_7d = cap_data[5] if cap_data else None
                     tf_results.append({
                         'Symbol': symbol,
                         'Setup': signal,
-                        'MarketCap': format_market_cap(cap_data[0]) if cap_data else None,
-                        'MarketCapRank': cap_data[1] if cap_data else None,
-                        'Volume (24h)': format_volume(cap_data[2]) if cap_data else None,
-                        'Liquidity': classify_liquidity(cap_data[2]) if cap_data else None,
-                        '% Change 1h': cap_data[3] if cap_data else None,
-                        '% Change 24h': cap_data[4] if cap_data else None,
-                        '% Change 7d': cap_data[5] if cap_data else None
+                        'MarketCap': format_market_cap(market_cap),
+                        'MarketCapRank': market_cap_rank,
+                        'Volume (24h)': format_volume(volume_24h),
+                        'Liquidity': classify_liquidity(volume_24h),
+                        '% Change 1h': percent_change_1h,
+                        '% Change 24h': percent_change_24h,
+                        '% Change 7d': percent_change_7d
                     })
         results[tf] = tf_results
     return results
-
-if run_scan:
-    placeholder.info("Starting scan...")
-    with st.spinner("Scanning Bitget markets... Please wait..."):
-        markets = BITGET.load_markets()
-        symbols = [s for s in markets if '/USDT:USDT' in s and markets[s]['type'] == 'swap']
-        st.success(f"Scanning {len(symbols)} symbols across: {', '.join(selected_timeframes)}")
-        st.session_state.results = analyze_cradle_setups(symbols, selected_timeframes)
-    st.session_state.is_scanning = False
-
-    for tf in selected_timeframes:
-        st.subheader(f"Results for {tf}")
-        results = st.session_state.results.get(tf, [])
-        if results:
-            df = pd.DataFrame(results)
-            if sort_option in df.columns:
-                df = df.sort_values(by=sort_option, ascending=True, na_position='last')
-            st.dataframe(df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No valid setups found.")
 
