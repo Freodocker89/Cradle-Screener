@@ -144,7 +144,10 @@ def fetch_market_caps():
                         market_caps[symbol] = (
                             quote.get('market_cap'),
                             item.get('cmc_rank'),
-                            quote.get('volume_24h')
+                            quote.get('volume_24h'),
+                            quote.get('percent_change_1h'),
+                            quote.get('percent_change_24h'),
+                            quote.get('percent_change_7d')
                         )
                     break
                 else:
@@ -248,13 +251,19 @@ def analyze_cradle_setups(symbols, timeframes):
                     market_cap = cap_data[0] if cap_data else None
                     market_cap_rank = cap_data[1] if cap_data else None
                     volume_24h = cap_data[2] if cap_data else None
+                    percent_change_1h = cap_data[3] if cap_data else None
+                    percent_change_24h = cap_data[4] if cap_data else None
+                    percent_change_7d = cap_data[5] if cap_data else None
                     tf_results.append({
                         'Symbol': symbol,
                         'Setup': signal,
                         'MarketCap': format_market_cap(market_cap),
                         'MarketCapRank': market_cap_rank,
                         'Volume (24h)': format_volume(volume_24h),
-                        'Liquidity': classify_liquidity(volume_24h)
+                        'Liquidity': classify_liquidity(volume_24h),
+                        '% Change 1h': percent_change_1h,
+                        '% Change 24h': percent_change_24h,
+                        '% Change 7d': percent_change_7d
                     })
         results[tf] = tf_results
     return results
