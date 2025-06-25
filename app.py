@@ -97,38 +97,6 @@ if 'market_caps_timestamp' not in st.session_state:
 run_scan = False
 manual_triggered = st.button("Run Screener", key="manual_run_button")
 
-if manual_triggered:
-    run_scan = True
-    st.session_state.is_scanning = True
-
-    countdown = st.empty()
-    start_time = time.time()
-
-    with st.spinner("Scanning markets... please wait..."):
-        markets = BITGET.load_markets()
-        symbols = [s for s in markets if '/USDT:USDT' in s and markets[s]['type'] == 'swap']
-        for sec in range(9999):
-            elapsed = int(time.time() - start_time)
-            countdown.info(f"⏳ Scanning... {elapsed} second(s) elapsed")
-            if elapsed >= 2:
-                break
-            time.sleep(1)
-        countdown.empty()
-        st.success(f"Scanning {len(symbols)} symbols across: {', '.join(selected_timeframes)}")
-        st.session_state.results = analyze_cradle_setups(symbols, selected_timeframes)
-    st.session_state.is_scanning = False
-
-    for tf in selected_timeframes:
-        st.subheader(f"Results for {tf}")
-        results = st.session_state.results.get(tf, [])
-        if results:
-            df = pd.DataFrame(results)
-            if sort_option in df.columns:
-                df = df.sort_values(by=sort_option, ascending=True, na_position='last')
-            st.dataframe(df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No valid setups found.")
-
 def fetch_market_caps():
     now = time.time()
     if st.session_state.cached_market_caps and now - st.session_state.market_caps_timestamp < 86400:
@@ -280,4 +248,36 @@ def analyze_cradle_setups(symbols, timeframes):
                     })
         results[tf] = tf_results
     return results
+
+if manual_triggered:
+    run_scan = True
+    st.session_state.is_scanning = True
+
+    countdown = st.empty()
+    start_time = time.time()
+
+    with st.spinner("Scanning markets... please wait..."):
+        markets = BITGET.load_markets()
+        symbols = [s for s in markets if '/USDT:USDT' in s and markets[s]['type'] == 'swap']
+        for sec in range(9999):
+            elapsed = int(time.time() - start_time)
+            countdown.info(f"⏳ Scanning... {elapsed} second(s) elapsed")
+            if elapsed >= 2:
+                break
+            time.sleep(1)
+        countdown.empty()
+        st.success(f"Scanning {len(symbols)} symbols across: {', '.join(selected_timeframes)}")
+        st.session_state.results = analyze_cradle_setups(symbols, selected_timeframes)
+    st.session_state.is_scanning = False
+
+    for tf in selected_timeframes:
+        st.subheader(f"Results for {tf}")
+        results = st.session_state.results.get(tf, [])
+        if results:
+            df = pd.DataFrame(results)
+            if sort_option in df.columns:
+                df = df.sort_values(by=sort_option, ascending=True, na_position='last')
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No valid setups found.")
 
