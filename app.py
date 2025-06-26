@@ -79,7 +79,7 @@ st.title("Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '1d'])
 
 small_candle_ratio = st.selectbox("Candle 2 max size (% of 25-bar avg range)", [25, 33, 50, 66, 75, 100], index=2) / 100
-sort_option = st.selectbox("Sort Results By", ["Symbol", "Setup", "MarketCap", "Rank"], index=0)
+sort_option = st.selectbox("Sort Results By", ["Rank", "Symbol", "Trend", "MarketCap"], index=0)
 
 placeholder = st.empty()
 
@@ -243,7 +243,7 @@ def analyze_cradle_setups(symbols, timeframes):
                     tf_results.append({
                         'Rank': market_cap_rank,
                         'Symbol': symbol,
-                        'Setup': signal,
+                        'Trend': signal,
                         'MarketCap': format_market_cap(market_cap),
                         'Volume (24h)': format_volume(volume_24h),
                         'Liquidity': classify_liquidity(volume_24h),
