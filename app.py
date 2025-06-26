@@ -158,6 +158,11 @@ def format_volume(val):
         return f"${val/1e3:.2f}K"
     return f"${val:.0f}"
 
+def format_percent(val):
+    if val is None:
+        return ""
+    return f"{val:+.2f}%"
+
 def classify_liquidity(vol):
     if vol is None:
         return "Unknown"
@@ -232,9 +237,9 @@ def analyze_cradle_setups(symbols, timeframes):
                     market_cap = cap_data[0] if cap_data else None
                     market_cap_rank = cap_data[1] if cap_data else None
                     volume_24h = cap_data[2] if cap_data else None
-                    percent_change_1h = cap_data[3] if cap_data else None
-                    percent_change_24h = cap_data[4] if cap_data else None
-                    percent_change_7d = cap_data[5] if cap_data else None
+                    percent_change_1h = format_percent(cap_data[3]) if cap_data else None
+                    percent_change_24h = format_percent(cap_data[4]) if cap_data else None
+                    percent_change_7d = format_percent(cap_data[5]) if cap_data else None
                     tf_results.append({
                         'Symbol': symbol,
                         'Setup': signal,
