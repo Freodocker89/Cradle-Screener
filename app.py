@@ -241,10 +241,10 @@ def analyze_cradle_setups(symbols, timeframes):
                     percent_change_24h = format_percent(cap_data[4]) if cap_data else None
                     percent_change_7d = format_percent(cap_data[5]) if cap_data else None
                     tf_results.append({
+                        'Rank': market_cap_rank,
                         'Symbol': symbol,
                         'Setup': signal,
                         'MarketCap': format_market_cap(market_cap),
-                        'Rank': market_cap_rank,
                         'Volume (24h)': format_volume(volume_24h),
                         'Liquidity': classify_liquidity(volume_24h),
                         '% Change 1h': percent_change_1h,
