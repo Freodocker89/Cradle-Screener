@@ -229,12 +229,37 @@ def structure_score(df, kind, strength):
 
 # === Momentum Detection ===
 def detect_momentum(df):
+    ema10 = df['close'].ewm(span=10).mean()
+    ema20 = df['close'].ewm(span=20).mean()
+    macd = calculate_macd(df)
+
     if ema10.iloc[-1] > ema20.iloc[-1] and macd.iloc[-1] > macd.iloc[-2]:
         trend = 'Bullish'
     elif ema10.iloc[-1] < ema20.iloc[-1] and macd.iloc[-1] < macd.iloc[-2]:
         trend = 'Bearish'
     else:
         return None
+
+    def find_swings(df, kind, strength):
+        cond = pd.Series([True] * len(df))
+        for i in range(1, strength + 1):
+            if kind == 'high':
+                cond &= (df['high'] > df['high'].shift(i)) & (df['high'] > df['high'].shift(-i))
+            else:
+                cond &= (df['low'] < df['low'].shift(i)) & (df['low'] < df['low'].shift(-i))
+        return df[cond]
+
+    window = df[-30:].reset_index(drop=True)
+    if trend == 'Bullish':
+        highs = find_swings(window, 'high', swing_strength)
+        if len(highs) >= 2 and highs['high'].iloc[-1] > highs['high'].iloc[-2]:
+            return 'Bullish'
+    elif trend == 'Bearish':
+        lows = find_swings(window, 'low', swing_strength)
+        if len(lows) >= 2 and lows['low'].iloc[-1] < lows['low'].iloc[-2]:
+            return 'Bearish'
+
+    return None
 
     def find_swings(df, kind, strength):
         cond = pd.Series([True] * len(df))
@@ -350,3 +375,4 @@ if show_momentum:
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.info("No momentum candidates found for this timeframe.")
+
