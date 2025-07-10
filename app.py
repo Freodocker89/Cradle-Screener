@@ -195,18 +195,34 @@ def check_cradle_setup(df):
     if not trend:
         return None, None
 
+    def find_swing_highs(df, strength=3):
+        return df[
+            (df['high'] > df['high'].shift(1)) &
+            (df['high'] > df['high'].shift(2)) &
+            (df['high'] > df['high'].shift(-1)) &
+            (df['high'] > df['high'].shift(-2))
+        ]
+
+    def find_swing_lows(df, strength=3):
+        return df[
+            (df['low'] < df['low'].shift(1)) &
+            (df['low'] < df['low'].shift(2)) &
+            (df['low'] < df['low'].shift(-1)) &
+            (df['low'] < df['low'].shift(-2))
+        ]
+
     macd_convergent = False
     window = df[-20:].copy().reset_index(drop=True)
     macd_window = calculate_macd(window).reset_index(drop=True)
 
     if trend == 'Bullish':
-        swings = window[(window['high'] > window['high'].shift(1)) & (window['high'] > window['high'].shift(-1))]
+        swings = find_swing_highs(window)
         if len(swings) >= 2:
             hh1_idx, hh2_idx = swings.index[-2], swings.index[-1]
             macd1, macd2 = macd_window[hh1_idx], macd_window[hh2_idx]
             macd_convergent = macd2 > macd1
     else:
-        swings = window[(window['low'] < window['low'].shift(1)) & (window['low'] < window['low'].shift(-1))]
+        swings = find_swing_lows(window)
         if len(swings) >= 2:
             ll1_idx, ll2_idx = swings.index[-2], swings.index[-1]
             macd1, macd2 = macd_window[ll1_idx], macd_window[ll2_idx]
