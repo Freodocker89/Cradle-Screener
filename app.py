@@ -210,6 +210,23 @@ def check_cradle_setup(df):
 
 # === Momentum Detection ===
 def detect_momentum(df):
+    def wick_noise_score(df, n=20):
+        recent = df[-n:]
+        ratios = (recent['high'] - recent['low']) / (recent['close'] - recent['open']).abs().replace(0, 1e-6)
+        avg_ratio = ratios.mean()
+        return min(avg_ratio, 5)  # cap to avoid extreme influence
+
+    def structure_score(df, kind, strength):
+        cond = pd.Series([True] * len(df))
+        for i in range(1, strength + 1):
+            if kind == 'high':
+                cond &= (df['high'] > df['high'].shift(i)) & (df['high'] > df['high'].shift(-i))
+            else:
+                cond &= (df['low'] < df['low'].shift(i)) & (df['low'] < df['low'].shift(-i))
+        swings = df[cond].reset_index(drop=True)
+        if len(swings) >= 2:
+            return min(len(swings), 4)
+        return 0
     ema10 = df['close'].ewm(span=10).mean()
     ema20 = df['close'].ewm(span=20).mean()
     macd = calculate_macd(df)
@@ -286,7 +303,13 @@ def run_scan():
                     })
 
                 if momentum_trend:
+                    structure = structure_score(df[-30:].reset_index(drop=True), 'high' if momentum_trend == 'Bullish' else 'low', swing_strength)
+                    macd_slope = (calculate_macd(df).iloc[-1] - calculate_macd(df).iloc[-5])
+                    macd_score = min(max(macd_slope * 100, 0), 3)
+                    wick_penalty = min(wick_noise_score(df), 3)
+                    momentum_rank = round(structure + macd_score - wick_penalty, 2)
                     tf_momentum.append({
+                        'Momentum Rank': momentum_rank,
                         'Symbol': sym,
                         'Momentum': momentum_trend,
                         'MarketCap': format_market_cap(cap[0]),
