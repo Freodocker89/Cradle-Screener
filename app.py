@@ -195,10 +195,9 @@ def check_cradle_setup(df):
     if not trend:
         return None, None
 
-    # === MACD Convergence Check ===
     macd_convergent = False
     window = df[-20:].copy().reset_index(drop=True)
-    macd_window = macd_line[-20:].reset_index(drop=True)
+    macd_window = calculate_macd(window).reset_index(drop=True)
 
     if trend == 'Bullish':
         swings = window[(window['high'] > window['high'].shift(1)) & (window['high'] > window['high'].shift(-1))]
@@ -266,6 +265,7 @@ for tf, res in st.session_state.results.items():
     st.subheader(f"Results for {tf}")
     if res:
         df = pd.DataFrame(res)
+        df["MACD Convergent"] = df["MACD Convergent"].map(lambda x: "✅" if x is True else "❌" if x is False else "N/A")
         if sort_option in df.columns:
             df = df.sort_values(by=sort_option, na_position='last')
         st.dataframe(df, use_container_width=True, hide_index=True)
