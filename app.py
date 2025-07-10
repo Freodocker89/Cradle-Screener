@@ -81,151 +81,55 @@ selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, de
 small_candle_ratio = st.selectbox("Candle 2 max size (% of 25-bar avg range)", [25, 33, 50, 66, 75, 100], index=2) / 100
 swing_strength = st.slider("Swing Strength (for pivot detection)", min_value=1, max_value=5, value=2, step=1)
 sort_option = st.selectbox("Sort Results By", ["Rank", "Symbol", "Trend", "MarketCap"], index=0)
+show_momentum = st.checkbox("Show Momentum Candidates Table", value=True)
 manual_triggered = st.button("Run Screener")
 
 # === Session State Init ===
 if 'results' not in st.session_state:
     st.session_state.results = {}
-
+if 'momentum' not in st.session_state:
+    st.session_state.momentum = {}
 if 'is_scanning' not in st.session_state:
     st.session_state.is_scanning = False
-
 if 'cached_market_caps' not in st.session_state:
     st.session_state.cached_market_caps = None
 if 'market_caps_timestamp' not in st.session_state:
     st.session_state.market_caps_timestamp = 0
 
-# === Market Cap Fetching ===
-def fetch_market_caps():
-    now = time.time()
-    if st.session_state.cached_market_caps and now - st.session_state.market_caps_timestamp < 86400:
-        return st.session_state.cached_market_caps
-
-    market_caps = {}
-    headers = {"X-CMC_PRO_API_KEY": st.secrets["CMC_API_KEY"]}
-    for start in range(1, 2001, 100):
-        url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
-        params = {"start": start, "limit": 100, "convert": "USD"}
-        for attempt in range(3):
-            try:
-                response = requests.get(url, headers=headers, params=params)
-                data = response.json()
-                if 'data' in data:
-                    for item in data['data']:
-                        symbol = item['symbol'].upper()
-                        quote = item['quote']['USD']
-                        market_caps[symbol] = (
-                            quote.get('market_cap'),
-                            item.get('cmc_rank'),
-                            quote.get('volume_24h'),
-                            quote.get('percent_change_1h'),
-                            quote.get('percent_change_24h'),
-                            quote.get('percent_change_7d')
-                        )
-                    break
-            except:
-                time.sleep(1.5)
-    st.session_state.cached_market_caps = market_caps
-    st.session_state.market_caps_timestamp = now
-    return market_caps
-
-# === Helpers ===
-def format_market_cap(val):
-    if val is None: return None
-    return f"${val/1e9:.2f}B" if val >= 1e9 else f"${val/1e6:.2f}M" if val >= 1e6 else f"${val/1e3:.2f}K"
-
-def format_volume(val):
-    if val is None: return None
-    return f"${val/1e9:.2f}B" if val >= 1e9 else f"${val/1e6:.2f}M" if val >= 1e6 else f"${val/1e3:.2f}K"
-
-def format_percent(p):
-    return f"{p:+.2f}%" if p is not None else None
-
-def classify_liquidity(vol):
-    if vol is None: return "Unknown"
-    elif vol > 100_000_000: return "High"
-    elif vol > 10_000_000: return "Medium"
-    else: return "Low"
-
-def calculate_macd(df, fast=12, slow=26, signal=9):
-    ema_fast = df['close'].ewm(span=fast).mean()
-    ema_slow = df['close'].ewm(span=slow).mean()
-    macd_line = ema_fast - ema_slow
-    return macd_line
-
-# === Screener Logic ===
-def fetch_ohlcv(symbol, tf):
-    try:
-        ohlcv = BITGET.fetch_ohlcv(symbol, tf, limit=100)
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        return df
-    except:
-        return None
-
-def check_cradle_setup(df):
-    if len(df) < 35:
-        return None, None
-
+# === Momentum Detection ===
+def detect_momentum(df):
     ema10 = df['close'].ewm(span=10).mean()
     ema20 = df['close'].ewm(span=20).mean()
-    macd_line = calculate_macd(df)
-
-    c1, c2 = df.iloc[-3], df.iloc[-2]
-    cradle_top, cradle_bot = max(ema10.iloc[-3], ema20.iloc[-3]), min(ema10.iloc[-3], ema20.iloc[-3])
-    avg_range = df.iloc[-28:-3].apply(lambda r: r['high'] - r['low'], axis=1).mean()
-    c2_range = c2['high'] - c2['low']
-
+    macd = calculate_macd(df)
     trend = None
-    if (
-        ema10.iloc[-3] > ema20.iloc[-3]
-        and c1['close'] < c1['open']
-        and cradle_bot <= c1['close'] <= cradle_top
-        and c2['close'] > c2['open']
-        and c2_range < small_candle_ratio * avg_range
-    ):
+
+    if ema10.iloc[-1] > ema20.iloc[-1] and macd.iloc[-1] > macd.iloc[-2]:
         trend = 'Bullish'
-    elif (
-        ema10.iloc[-3] < ema20.iloc[-3]
-        and c1['close'] > c1['open']
-        and cradle_bot <= c1['close'] <= cradle_top
-        and c2['close'] < c2['open']
-        and c2_range < small_candle_ratio * avg_range
-    ):
+    elif ema10.iloc[-1] < ema20.iloc[-1] and macd.iloc[-1] < macd.iloc[-2]:
         trend = 'Bearish'
-
-    if not trend:
-        return None, None
-
-    def find_swing_highs(df, strength):
-        cond = pd.Series([True] * len(df))
-        for i in range(1, strength + 1):
-            cond &= (df['high'] > df['high'].shift(i)) & (df['high'] > df['high'].shift(-i))
-        return df[cond]
-
-    def find_swing_lows(df, strength):
-        cond = pd.Series([True] * len(df))
-        for i in range(1, strength + 1):
-            cond &= (df['low'] < df['low'].shift(i)) & (df['low'] < df['low'].shift(-i))
-        return df[cond]
-
-    macd_convergent = False
-    window = df[-20:].copy().reset_index(drop=True)
-    macd_window = calculate_macd(window).reset_index(drop=True)
-
-    if trend == 'Bullish':
-        swings = find_swing_highs(window, swing_strength)
-        if len(swings) >= 2:
-            hh1_idx, hh2_idx = swings.index[-2], swings.index[-1]
-            macd1, macd2 = macd_window[hh1_idx], macd_window[hh2_idx]
-            macd_convergent = macd2 > macd1
     else:
-        swings = find_swing_lows(window, swing_strength)
-        if len(swings) >= 2:
-            ll1_idx, ll2_idx = swings.index[-2], swings.index[-1]
-            macd1, macd2 = macd_window[ll1_idx], macd_window[ll2_idx]
-            macd_convergent = macd2 < macd1
+        return None
 
-    return trend, macd_convergent
+    def find_swings(df, kind, strength):
+        cond = pd.Series([True] * len(df))
+        for i in range(1, strength + 1):
+            if kind == 'high':
+                cond &= (df['high'] > df['high'].shift(i)) & (df['high'] > df['high'].shift(-i))
+            else:
+                cond &= (df['low'] < df['low'].shift(i)) & (df['low'] < df['low'].shift(-i))
+        return df[cond]
+
+    window = df[-30:].reset_index(drop=True)
+    if trend == 'Bullish':
+        highs = find_swings(window, 'high', swing_strength)
+        if len(highs) >= 2 and highs['high'].iloc[-1] > highs['high'].iloc[-2]:
+            return 'Bullish'
+    elif trend == 'Bearish':
+        lows = find_swings(window, 'low', swing_strength)
+        if len(lows) >= 2 and lows['low'].iloc[-1] < lows['low'].iloc[-2]:
+            return 'Bearish'
+
+    return None
 
 # === Run Scanner ===
 def run_scan():
@@ -238,18 +142,24 @@ def run_scan():
     market_caps = fetch_market_caps()
 
     results = {}
+    momentum_results = {}
+
     for tf in selected_timeframes:
         tf_results = []
+        tf_momentum = []
         with ThreadPoolExecutor(max_workers=30) as executor:
             futures = {executor.submit(fetch_ohlcv, s, tf): s for s in symbols}
             for future in as_completed(futures):
                 sym = futures[future]
                 df = future.result()
-                if df is None or len(df) < 28: continue
+                if df is None or len(df) < 35: continue
+
                 trend, convergent = check_cradle_setup(df)
+                momentum_trend = detect_momentum(df)
+                sym_clean = sym.split('/')[0].replace(':USDT','')
+                cap = market_caps.get(sym_clean, [None]*6)
+
                 if trend:
-                    sym_clean = sym.split('/')[0].replace(':USDT','')
-                    cap = market_caps.get(sym_clean, [None]*6)
                     tf_results.append({
                         'Rank': cap[1],
                         'Symbol': sym,
@@ -262,9 +172,24 @@ def run_scan():
                         '% Change 24h': format_percent(cap[4]),
                         '% Change 7d': format_percent(cap[5])
                     })
+
+                if momentum_trend:
+                    tf_momentum.append({
+                        'Symbol': sym,
+                        'Momentum': momentum_trend,
+                        'MarketCap': format_market_cap(cap[0]),
+                        'Volume (24h)': format_volume(cap[2]),
+                        'Liquidity': classify_liquidity(cap[2]),
+                        '% Change 1h': format_percent(cap[3]),
+                        '% Change 24h': format_percent(cap[4]),
+                        '% Change 7d': format_percent(cap[5])
+                    })
+
         results[tf] = tf_results
+        momentum_results[tf] = tf_momentum
 
     st.session_state.results = results
+    st.session_state.momentum = momentum_results
     elapsed = time.time() - start_time
     st.success(f"✅ Scan complete in {elapsed:.1f} seconds.")
     st.session_state.is_scanning = False
@@ -284,3 +209,12 @@ for tf, res in st.session_state.results.items():
         st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.info("No setups found for this timeframe.")
+
+if show_momentum:
+    for tf, res in st.session_state.momentum.items():
+        st.subheader(f"Momentum Candidates for {tf}")
+        if res:
+            df = pd.DataFrame(res)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No momentum candidates found for this timeframe.")
