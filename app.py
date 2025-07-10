@@ -96,6 +96,118 @@ if 'cached_market_caps' not in st.session_state:
 if 'market_caps_timestamp' not in st.session_state:
     st.session_state.market_caps_timestamp = 0
 
+# === Market Cap Fetching ===
+def fetch_market_caps():
+    now = time.time()
+    if st.session_state.cached_market_caps and now - st.session_state.market_caps_timestamp < 86400:
+        return st.session_state.cached_market_caps
+
+    market_caps = {}
+    headers = {"X-CMC_PRO_API_KEY": st.secrets["CMC_API_KEY"]}
+    for start in range(1, 2001, 100):
+        url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
+        params = {"start": start, "limit": 100, "convert": "USD"}
+        for attempt in range(3):
+            try:
+                response = requests.get(url, headers=headers, params=params)
+                data = response.json()
+                if 'data' in data:
+                    for item in data['data']:
+                        symbol = item['symbol'].upper()
+                        quote = item['quote']['USD']
+                        market_caps[symbol] = (
+                            quote.get('market_cap'),
+                            item.get('cmc_rank'),
+                            quote.get('volume_24h'),
+                            quote.get('percent_change_1h'),
+                            quote.get('percent_change_24h'),
+                            quote.get('percent_change_7d')
+                        )
+                    break
+            except:
+                time.sleep(1.5)
+
+    st.session_state.cached_market_caps = market_caps
+    st.session_state.market_caps_timestamp = now
+    return market_caps
+
+# === Format Helpers ===
+def format_market_cap(val):
+    if val is None: return None
+    return f"${val/1e9:.2f}B" if val >= 1e9 else f"${val/1e6:.2f}M" if val >= 1e6 else f"${val/1e3:.2f}K"
+
+def format_volume(val):
+    if val is None: return None
+    return f"${val/1e9:.2f}B" if val >= 1e9 else f"${val/1e6:.2f}M" if val >= 1e6 else f"${val/1e3:.2f}K"
+
+def format_percent(p):
+    return f"{p:+.2f}%" if p is not None else None
+
+def classify_liquidity(vol):
+    if vol is None: return "Unknown"
+    elif vol > 100_000_000: return "High"
+    elif vol > 10_000_000: return "Medium"
+    else: return "Low"
+
+# === OHLCV Fetch ===
+def fetch_ohlcv(symbol, tf):
+    try:
+        ohlcv = BITGET.fetch_ohlcv(symbol, tf, limit=100)
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        return df
+    except:
+        return None
+
+# === MACD Calculation ===
+def calculate_macd(df):
+    ema12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema26 = df['close'].ewm(span=26, adjust=False).mean()
+    macd_line = ema12 - ema26
+    return macd_line
+
+# === Cradle Setup Detection ===
+def check_cradle_setup(df):
+    ema10 = df['close'].ewm(span=10).mean()
+    ema20 = df['close'].ewm(span=20).mean()
+    macd = calculate_macd(df)
+
+    if len(df) < 28: return None, None
+
+    c1, c2 = df.iloc[-3], df.iloc[-2]
+    cradle_top, cradle_bot = max(ema10.iloc[-3], ema20.iloc[-3]), min(ema10.iloc[-3], ema20.iloc[-3])
+    avg_range = df.iloc[-28:-3].apply(lambda r: r['high'] - r['low'], axis=1).mean()
+    c2_range = c2['high'] - c2['low']
+
+    trend = None
+    if ema10.iloc[-3] > ema20.iloc[-3] and c1['close'] < c1['open'] and cradle_bot <= c1['close'] <= cradle_top and c2['close'] > c2['open'] and c2_range < small_candle_ratio * avg_range:
+        trend = 'Bullish'
+    if ema10.iloc[-3] < ema20.iloc[-3] and c1['close'] > c1['open'] and cradle_bot <= c1['close'] <= cradle_top and c2['close'] < c2['open'] and c2_range < small_candle_ratio * avg_range:
+        trend = 'Bearish'
+
+    if not trend:
+        return None, None
+
+    def find_swings(df, kind, strength):
+        cond = pd.Series([True] * len(df))
+        for i in range(1, strength + 1):
+            if kind == 'high':
+                cond &= (df['high'] > df['high'].shift(i)) & (df['high'] > df['high'].shift(-i))
+            else:
+                cond &= (df['low'] < df['low'].shift(i)) & (df['low'] < df['low'].shift(-i))
+        return df[cond]
+
+    swings = find_swings(df[-30:].reset_index(drop=True), 'high' if trend == 'Bullish' else 'low', swing_strength)
+    if len(swings) < 2:
+        return trend, None
+
+    last, prev = swings.iloc[-1], swings.iloc[-2]
+    if trend == 'Bullish' and macd[last.name] > macd[prev.name]:
+        return trend, True
+    elif trend == 'Bearish' and macd[last.name] < macd[prev.name]:
+        return trend, True
+    else:
+        return trend, False
+
 # === Momentum Detection ===
 def detect_momentum(df):
     ema10 = df['close'].ewm(span=10).mean()
