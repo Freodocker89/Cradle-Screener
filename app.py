@@ -208,30 +208,27 @@ def check_cradle_setup(df):
     else:
         return trend, False
 
+# === Swing + Momentum Helpers ===
+def wick_noise_score(df, n=20):
+    recent = df[-n:]
+    ratios = (recent['high'] - recent['low']) / (recent['close'] - recent['open']).abs().replace(0, 1e-6)
+    avg_ratio = ratios.mean()
+    return min(avg_ratio, 5)  # cap to avoid extreme influence
+
+def structure_score(df, kind, strength):
+    cond = pd.Series([True] * len(df))
+    for i in range(1, strength + 1):
+        if kind == 'high':
+            cond &= (df['high'] > df['high'].shift(i)) & (df['high'] > df['high'].shift(-i))
+        else:
+            cond &= (df['low'] < df['low'].shift(i)) & (df['low'] < df['low'].shift(-i))
+    swings = df[cond].reset_index(drop=True)
+    if len(swings) >= 2:
+        return min(len(swings), 4)
+    return 0
+
 # === Momentum Detection ===
 def detect_momentum(df):
-    def wick_noise_score(df, n=20):
-        recent = df[-n:]
-        ratios = (recent['high'] - recent['low']) / (recent['close'] - recent['open']).abs().replace(0, 1e-6)
-        avg_ratio = ratios.mean()
-        return min(avg_ratio, 5)  # cap to avoid extreme influence
-
-    def structure_score(df, kind, strength):
-        cond = pd.Series([True] * len(df))
-        for i in range(1, strength + 1):
-            if kind == 'high':
-                cond &= (df['high'] > df['high'].shift(i)) & (df['high'] > df['high'].shift(-i))
-            else:
-                cond &= (df['low'] < df['low'].shift(i)) & (df['low'] < df['low'].shift(-i))
-        swings = df[cond].reset_index(drop=True)
-        if len(swings) >= 2:
-            return min(len(swings), 4)
-        return 0
-    ema10 = df['close'].ewm(span=10).mean()
-    ema20 = df['close'].ewm(span=20).mean()
-    macd = calculate_macd(df)
-    trend = None
-
     if ema10.iloc[-1] > ema20.iloc[-1] and macd.iloc[-1] > macd.iloc[-2]:
         trend = 'Bullish'
     elif ema10.iloc[-1] < ema20.iloc[-1] and macd.iloc[-1] < macd.iloc[-2]:
