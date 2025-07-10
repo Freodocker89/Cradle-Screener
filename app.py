@@ -79,6 +79,7 @@ st.markdown(f"""
 st.title("Cradle Screener")
 selected_timeframes = st.multiselect("Select Timeframes to Scan", TIMEFRAMES, default=['1h', '4h', '12h'])
 small_candle_ratio = st.selectbox("Candle 2 max size (% of 25-bar avg range)", [25, 33, 50, 66, 75, 100], index=2) / 100
+swing_strength = st.slider("Swing Strength (for pivot detection)", min_value=1, max_value=5, value=2, step=1)
 sort_option = st.selectbox("Sort Results By", ["Rank", "Symbol", "Trend", "MarketCap"], index=0)
 manual_triggered = st.button("Run Screener")
 
@@ -195,34 +196,30 @@ def check_cradle_setup(df):
     if not trend:
         return None, None
 
-    def find_swing_highs(df, strength=3):
-        return df[
-            (df['high'] > df['high'].shift(1)) &
-            (df['high'] > df['high'].shift(2)) &
-            (df['high'] > df['high'].shift(-1)) &
-            (df['high'] > df['high'].shift(-2))
-        ]
+    def find_swing_highs(df, strength):
+        cond = pd.Series([True] * len(df))
+        for i in range(1, strength + 1):
+            cond &= (df['high'] > df['high'].shift(i)) & (df['high'] > df['high'].shift(-i))
+        return df[cond]
 
-    def find_swing_lows(df, strength=3):
-        return df[
-            (df['low'] < df['low'].shift(1)) &
-            (df['low'] < df['low'].shift(2)) &
-            (df['low'] < df['low'].shift(-1)) &
-            (df['low'] < df['low'].shift(-2))
-        ]
+    def find_swing_lows(df, strength):
+        cond = pd.Series([True] * len(df))
+        for i in range(1, strength + 1):
+            cond &= (df['low'] < df['low'].shift(i)) & (df['low'] < df['low'].shift(-i))
+        return df[cond]
 
     macd_convergent = False
     window = df[-20:].copy().reset_index(drop=True)
     macd_window = calculate_macd(window).reset_index(drop=True)
 
     if trend == 'Bullish':
-        swings = find_swing_highs(window)
+        swings = find_swing_highs(window, swing_strength)
         if len(swings) >= 2:
             hh1_idx, hh2_idx = swings.index[-2], swings.index[-1]
             macd1, macd2 = macd_window[hh1_idx], macd_window[hh2_idx]
             macd_convergent = macd2 > macd1
     else:
-        swings = find_swing_lows(window)
+        swings = find_swing_lows(window, swing_strength)
         if len(swings) >= 2:
             ll1_idx, ll2_idx = swings.index[-2], swings.index[-1]
             macd1, macd2 = macd_window[ll1_idx], macd_window[ll2_idx]
