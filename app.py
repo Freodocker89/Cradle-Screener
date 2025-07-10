@@ -146,6 +146,12 @@ def classify_liquidity(vol):
     elif vol > 10_000_000: return "Medium"
     else: return "Low"
 
+def calculate_macd(df, fast=12, slow=26, signal=9):
+    ema_fast = df['close'].ewm(span=fast).mean()
+    ema_slow = df['close'].ewm(span=slow).mean()
+    macd_line = ema_fast - ema_slow
+    return macd_line
+
 # === Screener Logic ===
 def fetch_ohlcv(symbol, tf):
     try:
@@ -156,20 +162,58 @@ def fetch_ohlcv(symbol, tf):
         return None
 
 def check_cradle_setup(df):
+    if len(df) < 35:
+        return None, None
+
     ema10 = df['close'].ewm(span=10).mean()
     ema20 = df['close'].ewm(span=20).mean()
-    if len(df) < 28: return None
+    macd_line = calculate_macd(df)
 
     c1, c2 = df.iloc[-3], df.iloc[-2]
     cradle_top, cradle_bot = max(ema10.iloc[-3], ema20.iloc[-3]), min(ema10.iloc[-3], ema20.iloc[-3])
     avg_range = df.iloc[-28:-3].apply(lambda r: r['high'] - r['low'], axis=1).mean()
     c2_range = c2['high'] - c2['low']
 
-    if ema10.iloc[-3] > ema20.iloc[-3] and c1['close'] < c1['open'] and cradle_bot <= c1['close'] <= cradle_top and c2['close'] > c2['open'] and c2_range < small_candle_ratio * avg_range:
-        return 'Bullish'
-    if ema10.iloc[-3] < ema20.iloc[-3] and c1['close'] > c1['open'] and cradle_bot <= c1['close'] <= cradle_top and c2['close'] < c2['open'] and c2_range < small_candle_ratio * avg_range:
-        return 'Bearish'
-    return None
+    trend = None
+    if (
+        ema10.iloc[-3] > ema20.iloc[-3]
+        and c1['close'] < c1['open']
+        and cradle_bot <= c1['close'] <= cradle_top
+        and c2['close'] > c2['open']
+        and c2_range < small_candle_ratio * avg_range
+    ):
+        trend = 'Bullish'
+    elif (
+        ema10.iloc[-3] < ema20.iloc[-3]
+        and c1['close'] > c1['open']
+        and cradle_bot <= c1['close'] <= cradle_top
+        and c2['close'] < c2['open']
+        and c2_range < small_candle_ratio * avg_range
+    ):
+        trend = 'Bearish'
+
+    if not trend:
+        return None, None
+
+    # === MACD Convergence Check ===
+    macd_convergent = False
+    window = df[-20:].copy().reset_index(drop=True)
+    macd_window = macd_line[-20:].reset_index(drop=True)
+
+    if trend == 'Bullish':
+        swings = window[(window['high'] > window['high'].shift(1)) & (window['high'] > window['high'].shift(-1))]
+        if len(swings) >= 2:
+            hh1_idx, hh2_idx = swings.index[-2], swings.index[-1]
+            macd1, macd2 = macd_window[hh1_idx], macd_window[hh2_idx]
+            macd_convergent = macd2 > macd1
+    else:
+        swings = window[(window['low'] < window['low'].shift(1)) & (window['low'] < window['low'].shift(-1))]
+        if len(swings) >= 2:
+            ll1_idx, ll2_idx = swings.index[-2], swings.index[-1]
+            macd1, macd2 = macd_window[ll1_idx], macd_window[ll2_idx]
+            macd_convergent = macd2 < macd1
+
+    return trend, macd_convergent
 
 # === Run Scanner ===
 def run_scan():
@@ -190,7 +234,7 @@ def run_scan():
                 sym = futures[future]
                 df = future.result()
                 if df is None or len(df) < 28: continue
-                trend = check_cradle_setup(df)
+                trend, convergent = check_cradle_setup(df)
                 if trend:
                     sym_clean = sym.split('/')[0].replace(':USDT','')
                     cap = market_caps.get(sym_clean, [None]*6)
@@ -198,6 +242,7 @@ def run_scan():
                         'Rank': cap[1],
                         'Symbol': sym,
                         'Trend': trend,
+                        'MACD Convergent': convergent,
                         'MarketCap': format_market_cap(cap[0]),
                         'Volume (24h)': format_volume(cap[2]),
                         'Liquidity': classify_liquidity(cap[2]),
@@ -226,4 +271,3 @@ for tf, res in st.session_state.results.items():
         st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.info("No setups found for this timeframe.")
-
