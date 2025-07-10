@@ -215,16 +215,38 @@ def wick_noise_score(df, n=20):
     avg_ratio = ratios.mean()
     return min(avg_ratio, 5)  # cap to avoid extreme influence
 
-def structure_score(df, kind, strength):
-    cond = pd.Series([True] * len(df))
-    for i in range(1, strength + 1):
-        if kind == 'high':
-            cond &= (df['high'] > df['high'].shift(i)) & (df['high'] > df['high'].shift(-i))
-        else:
-            cond &= (df['low'] < df['low'].shift(i)) & (df['low'] < df['low'].shift(-i))
-    swings = df[cond].reset_index(drop=True)
-    if len(swings) >= 2:
-        return min(len(swings), 4)
+def trend_quality_score(df, trend, strength=2):
+    def find_swings(df, kind):
+        cond = pd.Series([True] * len(df))
+        for i in range(1, strength + 1):
+            if kind == 'high':
+                cond &= (df['high'] > df['high'].shift(i)) & (df['high'] > df['high'].shift(-i))
+            else:
+                cond &= (df['low'] < df['low'].shift(i)) & (df['low'] < df['low'].shift(-i))
+        swings = df[cond].copy().reset_index()
+        return swings
+
+    window = df[-50:].reset_index(drop=True)
+    if trend == 'Bullish':
+        highs = find_swings(window, 'high')
+        lows = find_swings(window, 'low')
+        if len(highs) >= 2 and len(lows) >= 1:
+            if highs['high'].iloc[-1] > highs['high'].iloc[-2] and lows['low'].iloc[-1] > lows['low'].iloc[-2]:
+                return 4
+            elif highs['high'].iloc[-1] > highs['high'].iloc[-2] or lows['low'].iloc[-1] > lows['low'].iloc[-2]:
+                return 3
+        elif len(highs) >= 1 or len(lows) >= 1:
+            return 2
+    elif trend == 'Bearish':
+        lows = find_swings(window, 'low')
+        highs = find_swings(window, 'high')
+        if len(lows) >= 2 and len(highs) >= 1:
+            if lows['low'].iloc[-1] < lows['low'].iloc[-2] and highs['high'].iloc[-1] < highs['high'].iloc[-2]:
+                return 4
+            elif lows['low'].iloc[-1] < lows['low'].iloc[-2] or highs['high'].iloc[-1] < highs['high'].iloc[-2]:
+                return 3
+        elif len(lows) >= 1 or len(highs) >= 1:
+            return 2
     return 0
 
 # === Momentum Detection ===
@@ -325,7 +347,7 @@ def run_scan():
                     })
 
                 if momentum_trend:
-                    structure = structure_score(df[-30:].reset_index(drop=True), 'high' if momentum_trend == 'Bullish' else 'low', swing_strength)
+                    structure = trend_quality_score(df, momentum_trend, swing_strength), 'high' if momentum_trend == 'Bullish' else 'low', swing_strength)
                     macd_slope = (calculate_macd(df).iloc[-1] - calculate_macd(df).iloc[-5])
                     macd_score = min(max(macd_slope * 100, 0), 3)
                     wick_penalty = min(wick_noise_score(df), 3)
