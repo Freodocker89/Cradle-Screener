@@ -347,7 +347,7 @@ def run_scan():
                     })
 
                 if momentum_trend:
-                    structure = trend_quality_score(df, momentum_trend, swing_strength), 'high' if momentum_trend == 'Bullish' else 'low', swing_strength)
+                    structure = trend_quality_score(df, momentum_trend, swing_strength)
                     macd_slope = (calculate_macd(df).iloc[-1] - calculate_macd(df).iloc[-5])
                     macd_score = min(max(macd_slope * 100, 0), 3)
                     wick_penalty = min(wick_noise_score(df), 3)
