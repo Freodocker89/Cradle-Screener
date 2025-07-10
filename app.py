@@ -230,22 +230,22 @@ def trend_quality_score(df, trend, strength=2):
     if trend == 'Bullish':
         highs = find_swings(window, 'high')
         lows = find_swings(window, 'low')
-        if len(highs) >= 2 and len(lows) >= 1:
-            if highs['high'].iloc[-1] > highs['high'].iloc[-2] and lows['low'].iloc[-1] > lows['low'].iloc[-2]:
-                return 4
-            elif highs['high'].iloc[-1] > highs['high'].iloc[-2] or lows['low'].iloc[-1] > lows['low'].iloc[-2]:
-                return 3
-        elif len(highs) >= 1 or len(lows) >= 1:
+        if len(highs) >= 2 and len(lows) >= 2:
+        if highs.index[-1] > highs.index[-2] and highs['high'].iloc[-1] > highs['high'].iloc[-2] and \
+           lows.index[-1] > lows.index[-2] and lows['low'].iloc[-1] > lows['low'].iloc[-2]:
+            return 4
+        elif highs['high'].iloc[-1] > highs['high'].iloc[-2] or lows['low'].iloc[-1] > lows['low'].iloc[-2]:
+            return 3
             return 2
     elif trend == 'Bearish':
         lows = find_swings(window, 'low')
         highs = find_swings(window, 'high')
-        if len(lows) >= 2 and len(highs) >= 1:
-            if lows['low'].iloc[-1] < lows['low'].iloc[-2] and highs['high'].iloc[-1] < highs['high'].iloc[-2]:
-                return 4
-            elif lows['low'].iloc[-1] < lows['low'].iloc[-2] or highs['high'].iloc[-1] < highs['high'].iloc[-2]:
-                return 3
-        elif len(lows) >= 1 or len(highs) >= 1:
+        if len(lows) >= 2 and len(highs) >= 2:
+        if lows.index[-1] > lows.index[-2] and lows['low'].iloc[-1] < lows['low'].iloc[-2] and \
+           highs.index[-1] > highs.index[-2] and highs['high'].iloc[-1] < highs['high'].iloc[-2]:
+            return 4
+        elif lows['low'].iloc[-1] < lows['low'].iloc[-2] or highs['high'].iloc[-1] < highs['high'].iloc[-2]:
+            return 3
             return 2
     return 0
 
