@@ -232,7 +232,8 @@ def trend_quality_score(df, trend, strength=2):
         lows = find_swings(window, 'low')
         if len(highs) >= 2 and len(lows) >= 2:
             if highs.index[-1] > highs.index[-2] and highs['high'].iloc[-1] > highs['high'].iloc[-2] and \
-               lows.index[-1] > lows.index[-2] and lows['low'].iloc[-1] > lows['low'].iloc[-2]:
+            lows.index[-1] > lows.index[-2] and lows['low'].iloc[-1] > lows['low'].iloc[-2]:
+        return 4
             return 4
         elif highs['high'].iloc[-1] > highs['high'].iloc[-2] or lows['low'].iloc[-1] > lows['low'].iloc[-2]:
             return 3
